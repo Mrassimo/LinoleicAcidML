@@ -16,8 +16,8 @@ import numpy as np
 import re
 import argparse
 
-# Add the src directory to the Python path
-sys.path.append(str(Path(__file__).parent.parent))
+# Fix the import path issue
+sys.path.append(str(Path(__file__).parent.parent.parent))
 from src.models.aihw_models import AIHWRecord, AIHWDataset, MetricType
 
 # Configure logging
@@ -217,19 +217,19 @@ def process_sheet(df: pd.DataFrame, sheet_name: str, file_name: str) -> List[AIH
                                         condition="Dementia"
                                     ))
                                     
-                            # Crude rates - cols 7-9
-                            for col_idx, sex in [(7, "men"), (8, "women"), (9, "persons")]:
-                                if not pd.isna(row.iloc[col_idx]):
-                                    records.append(AIHWRecord(
-                                        year=year,
-                                        value=float(row.iloc[col_idx]),
-                                        metric_type=MetricType.CRUDE_RATE,
-                                        source_sheet=sheet_name,
-                                        sex=sex,
-                                        age_group=None,
-                                        table_name="Deaths due to dementia in Australia",
-                                        condition="Dementia"
-                                    ))
+                                    # Crude rates - cols 7-9
+                                    for col_idx, sex in [(7, "men"), (8, "women"), (9, "persons")]:
+                                        if not pd.isna(row.iloc[col_idx]):
+                                            records.append(AIHWRecord(
+                                                year=year,
+                                                value=float(row.iloc[col_idx]),
+                                                metric_type=MetricType.CRUDE_RATE,
+                                                source_sheet=sheet_name,
+                                                sex=sex,
+                                                age_group=None,
+                                                table_name="Deaths due to dementia in Australia",
+                                                condition="Dementia"
+                                            ))
                         else:
                             logger.warning(f"Invalid year {year_val} in S3.3 row {idx} - outside valid range 2009-2022")
                     except (ValueError, TypeError) as e:
@@ -823,34 +823,311 @@ def process_all_aihw_files(raw_dir, processed_dir):
         
         if os.path.exists(input_path):
             try:
-                # Process the Excel file
-                dataset = process_aihw_excel(input_path, output_path)
-                
-                # Convert records to DataFrame
-                records_data = []
-                for record in dataset.records:
-                    record_dict = record.model_dump()
-                    records_data.append(record_dict)
-                
-                if records_data:
-                    df = pd.DataFrame(records_data)
-                    # Drop empty columns that provide no value
-                    columns_to_drop = ['region', 'indigenous_status', 'notes']
-                    df = df.drop(columns=columns_to_drop, errors='ignore')
+                # Handle specific sheets based on the file
+                if 'S2-Prevalence' in excel_file:
+                    logger.info(f"Processing only sheet S2.4 from {excel_file}")
+                    # Read only sheet S2.4 (dementia prevalence by year)
+                    df = pd.read_excel(input_path, sheet_name='S2.4', header=None)
                     
-                    # FINAL SAFETY CHECK: Filter only 2009-2022 years regardless of what earlier filtering did
-                    if 'year' in df.columns:
-                        original_count = len(df)
-                        df = df[(df['year'] >= 2009) & (df['year'] <= 2022)]
-                        filtered_count = original_count - len(df)
-                        if filtered_count > 0:
-                            logger.info(f"Final filtering: removed {filtered_count} records with invalid years from {csv_file}")
+                    # Custom handling for S2.4 which has a specific structure
+                    # The sheet has years in rows and separate columns for men/women/persons
+                    records = []
                     
-                    df.to_csv(output_path, index=False)
-                    logger.info(f"Successfully saved {len(df)} records to {csv_file}")
-                    results[csv_file] = df
+                    # Find where the actual data begins by looking for the header row
+                    header_row = None
+                    for i in range(min(15, len(df))):
+                        if pd.notna(df.iloc[i, 0]) and ("Year" in str(df.iloc[i, 0]) or "year" in str(df.iloc[i, 0]).lower()):
+                            header_row = i
+                            break
+                    
+                    if header_row is not None:
+                        logger.info(f"Found header row at row {header_row}")
+                        # Skip the header row and get data rows
+                        data_rows = df.iloc[header_row+1:].reset_index(drop=True)
+                        
+                        # Keep only rows that have a year in the first column
+                        valid_rows = []
+                        for idx, row in data_rows.iterrows():
+                            if pd.notna(row.iloc[0]):
+                                try:
+                                    # Try to extract a year from the first column
+                                    year_val = row.iloc[0]
+                                    # Handle both integer and float years
+                                    if isinstance(year_val, (int, float)):
+                                        year_int = int(year_val)
+                                        if 1980 <= year_int <= 2060:  # Allow projections to 2060
+                                            valid_rows.append(row)
+                                    else:
+                                        year_str = str(year_val).strip()
+                                        # Handle possible float strings like "2010.0"
+                                        if '.' in year_str:
+                                            year_str = year_str.split('.')[0]
+                                        if year_str.isdigit() and 1980 <= int(year_str) <= 2060:
+                                            valid_rows.append(row)
+                                except Exception as e:
+                                    logger.debug(f"Error parsing year in S2.4 row {idx}: {e}")
+                                    continue
+                        
+                        if valid_rows:
+                            # Create a DataFrame from valid rows
+                            valid_df = pd.DataFrame(valid_rows).reset_index(drop=True)
+                            
+                            # Process each valid row
+                            for idx, row in valid_df.iterrows():
+                                # Handle both integer and float years
+                                year_val = row.iloc[0]
+                                if isinstance(year_val, (int, float)):
+                                    year = int(year_val)
+                                else:
+                                    year_str = str(year_val).strip()
+                                    if '.' in year_str:
+                                        year_str = year_str.split('.')[0]
+                                    year = int(year_str)
+                                
+                                # Create records for men (col 1), women (col 2), persons (col 3)
+                                for col_idx, sex in [(1, "men"), (2, "women"), (3, "persons")]:
+                                    if col_idx < len(row) and pd.notna(row.iloc[col_idx]):
+                                        try:
+                                            value = float(row.iloc[col_idx])
+                                            records.append(AIHWRecord(
+                                                year=year,
+                                                value=value,
+                                                metric_type=MetricType.NUMBER,
+                                                source_sheet="S2.4",
+                                                sex=sex,
+                                                age_group=None,
+                                                table_name="Australians living with dementia",
+                                                condition="Dementia"
+                                            ))
+                                        except:
+                                            continue
+                                            
+                            logger.info(f"Extracted {len(records)} prevalence records from sheet S2.4")
+                    else:
+                        logger.warning("Could not locate header row in sheet S2.4")
+                    
+                    # Convert records to DataFrame
+                    records_data = []
+                    for record in records:
+                        record_dict = record.model_dump()
+                        records_data.append(record_dict)
+                    
+                    if records_data:
+                        df = pd.DataFrame(records_data)
+                        # Clean up the DataFrame
+                        columns_to_drop = ['region', 'indigenous_status', 'notes']
+                        df = df.drop(columns=columns_to_drop, errors='ignore')
+                        
+                        # Sort by year and clean up
+                        if 'year' in df.columns:
+                            df = df.sort_values('year')
+                        
+                        df.to_csv(output_path, index=False)
+                        logger.info(f"Successfully saved {len(df)} records to {csv_file}")
+                        results[csv_file] = df
+                    else:
+                        logger.warning(f"No valid records found in sheet S2.4")
+
+                elif 'S3-Mortality' in excel_file:
+                    logger.info(f"Processing only sheet S3.5 from {excel_file}")
+                    # Read only sheet S3.5 (dementia mortality data)
+                    df = pd.read_excel(input_path, sheet_name='S3.5', header=None)
+                    # Process only this sheet
+                    records = process_sheet(df, 'S3.5', excel_file)
+                    
+                    # Convert records to DataFrame
+                    records_data = []
+                    for record in records:
+                        record_dict = record.model_dump()
+                        records_data.append(record_dict)
+                    
+                    if records_data:
+                        df = pd.DataFrame(records_data)
+                        # Clean up the DataFrame
+                        columns_to_drop = ['region', 'indigenous_status', 'notes']
+                        df = df.drop(columns=columns_to_drop, errors='ignore')
+                        
+                        # Sort by year and clean up
+                        if 'year' in df.columns:
+                            df = df.sort_values('year')
+                        
+                        df.to_csv(output_path, index=False)
+                        logger.info(f"Successfully saved {len(df)} records to {csv_file}")
+                        results[csv_file] = df
+                    else:
+                        logger.warning(f"No valid records found in sheet S3.5")
+                
+                elif 'CVD' in excel_file:
+                    logger.info(f"Processing Table 11 (CVD mortality time series from 1980-2022) from {excel_file}")
+                    
+                    # Read the All CVD sheet
+                    df = pd.read_excel(input_path, sheet_name='All CVD', header=None)
+                    
+                    # Special handling for CVD Table 11 (Cardiovascular disease deaths 1980-2022)
+                    records = []
+                    # Table 11 starts around row 229 in the Excel file
+                    table_start = None
+                    table_end = None
+                    
+                    # Find Table 11 by looking for its header row
+                    for i in range(len(df)):
+                        if pd.notna(df.iloc[i, 0]) and "Table 11" in str(df.iloc[i, 0]):
+                            table_start = i
+                            # Find where table ends (looking for empty rows or notes)
+                            for j in range(i + 10, len(df)):  # Start at least 10 rows after table header
+                                if pd.isna(df.iloc[j, 0]) or str(df.iloc[j, 0]).startswith("Note"):
+                                    table_end = j
+                                    break
+                            break
+                    
+                    if table_start is not None and table_end is not None:
+                        logger.info(f"Found Table 11 from rows {table_start} to {table_end}")
+                        # Extract the table data (skip header rows - years start 2-3 rows after table title)
+                        data_start = table_start + 3  # Adjust based on the actual structure
+                        table_data = df.iloc[data_start:table_end].reset_index(drop=True)
+                        
+                        # Process each row in the table
+                        for idx, row in table_data.iterrows():
+                            try:
+                                # Year is in column 0
+                                year_val = row.iloc[0]
+                                if pd.isna(year_val):
+                                    continue
+                                
+                                try:
+                                    # Extract year - for CVD data, we want ALL years including 1980s
+                                    year = int(str(year_val))
+                                    if 1980 <= year <= 2022:  # Allow full historical range
+                                        # Create records for each metric
+                                        
+                                        # Men deaths - col 1
+                                        if not pd.isna(row.iloc[1]):
+                                            records.append(AIHWRecord(
+                                                year=year,
+                                                value=float(row.iloc[1]),
+                                                metric_type=MetricType.NUMBER,
+                                                source_sheet="Table 11",
+                                                sex="men",
+                                                age_group=None,
+                                                table_name="Cardiovascular disease deaths in Australia",
+                                                condition="Cardiovascular Disease"
+                                            ))
+                                        
+                                        # Women deaths - col 2
+                                        if not pd.isna(row.iloc[2]):
+                                            records.append(AIHWRecord(
+                                                year=year,
+                                                value=float(row.iloc[2]),
+                                                metric_type=MetricType.NUMBER,
+                                                source_sheet="Table 11",
+                                                sex="women",
+                                                age_group=None,
+                                                table_name="Cardiovascular disease deaths in Australia",
+                                                condition="Cardiovascular Disease"
+                                            ))
+                                        
+                                        # Persons deaths - col 3
+                                        if not pd.isna(row.iloc[3]):
+                                            records.append(AIHWRecord(
+                                                year=year,
+                                                value=float(row.iloc[3]),
+                                                metric_type=MetricType.NUMBER,
+                                                source_sheet="Table 11",
+                                                sex="persons",
+                                                age_group=None,
+                                                table_name="Cardiovascular disease deaths in Australia",
+                                                condition="Cardiovascular Disease"
+                                            ))
+                                        
+                                        # Crude rates - cols 4-6
+                                        for col_idx, sex in [(4, "men"), (5, "women"), (6, "persons")]:
+                                            if not pd.isna(row.iloc[col_idx]):
+                                                records.append(AIHWRecord(
+                                                    year=year,
+                                                    value=float(row.iloc[col_idx]),
+                                                    metric_type=MetricType.CRUDE_RATE,
+                                                    source_sheet="Table 11",
+                                                    sex=sex,
+                                                    age_group=None,
+                                                    table_name="Cardiovascular disease deaths in Australia",
+                                                    condition="Cardiovascular Disease"
+                                                ))
+                                        
+                                        # Age-standardised rates - cols 7-9
+                                        for col_idx, sex in [(7, "men"), (8, "women"), (9, "persons")]:
+                                            if not pd.isna(row.iloc[col_idx]):
+                                                records.append(AIHWRecord(
+                                                    year=year,
+                                                    value=float(row.iloc[col_idx]),
+                                                    metric_type=MetricType.STANDARDISED_RATE,
+                                                    source_sheet="Table 11",
+                                                    sex=sex,
+                                                    age_group=None,
+                                                    table_name="Cardiovascular disease deaths in Australia",
+                                                    condition="Cardiovascular Disease"
+                                                ))
+                                except (ValueError, TypeError) as e:
+                                    logger.warning(f"Error processing year in Table 11 row {idx}: {e}")
+                                    continue
+                            except Exception as e:
+                                logger.warning(f"Error processing Table 11 row {idx}: {e}")
+                                continue
+                        
+                        logger.info(f"Extracted {len(records)} CVD mortality records from Table 11")
+                    else:
+                        logger.warning("Could not locate Table 11 in the CVD Excel file")
+                    
+                    # Convert records to DataFrame
+                    records_data = []
+                    for record in records:
+                        record_dict = record.model_dump()
+                        records_data.append(record_dict)
+                    
+                    if records_data:
+                        df = pd.DataFrame(records_data)
+                        # Clean up the DataFrame
+                        columns_to_drop = ['region', 'indigenous_status', 'notes']
+                        df = df.drop(columns=columns_to_drop, errors='ignore')
+                        
+                        # Sort by year
+                        if 'year' in df.columns:
+                            df = df.sort_values('year')
+                        
+                        df.to_csv(output_path, index=False)
+                        logger.info(f"Successfully saved {len(df)} CVD records to {csv_file}")
+                        results[csv_file] = df
+                    else:
+                        logger.warning(f"No valid records found in Table 11")
+                
                 else:
-                    logger.warning(f"No valid records found in {excel_file}")
+                    # Standard processing for other files
+                    dataset = process_aihw_excel(input_path, output_path)
+                    
+                    # Convert records to DataFrame
+                    records_data = []
+                    for record in dataset.records:
+                        record_dict = record.model_dump()
+                        records_data.append(record_dict)
+                    
+                    if records_data:
+                        df = pd.DataFrame(records_data)
+                        # Drop empty columns that provide no value
+                        columns_to_drop = ['region', 'indigenous_status', 'notes']
+                        df = df.drop(columns=columns_to_drop, errors='ignore')
+                        
+                        # Allow years outside 2009-2022 for CVD data (if it's the CVD file)
+                        if 'year' in df.columns and 'CVD' not in excel_file:
+                            original_count = len(df)
+                            df = df[(df['year'] >= 2009) & (df['year'] <= 2022)]
+                            filtered_count = original_count - len(df)
+                            if filtered_count > 0:
+                                logger.info(f"Final filtering: removed {filtered_count} records with invalid years from {csv_file}")
+                        
+                        df.to_csv(output_path, index=False)
+                        logger.info(f"Successfully saved {len(df)} records to {csv_file}")
+                        results[csv_file] = df
+                    else:
+                        logger.warning(f"No valid records found in {excel_file}")
                     
             except Exception as e:
                 logger.error(f"Error processing {excel_file}: {e}")
