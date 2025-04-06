@@ -55,13 +55,27 @@ def extract_table_name(df: pd.DataFrame, sheet_name: str) -> Optional[str]:
 
 def extract_year(text: str) -> Optional[int]:
     """Extract year from text, handling ranges and financial years."""
+    # Skip numeric values that aren't actually years (e.g., data values)
+    if isinstance(text, (int, float)) or (isinstance(text, str) and text.replace('.', '', 1).isdigit()):
+        numeric_value = float(text)
+        # If it's a large number that could be a count/value rather than a year, skip it
+        if numeric_value > 3000:  # Arbitrary threshold higher than realistic year values
+            return None
+    
     match = YEAR_PATTERN.search(str(text))
     if match:
         year_str = match.group(0)
         if '-' in year_str or '–' in year_str:
             # For ranges like 2022-23, take the first year
-            return int(year_str.split('-')[0].split('–')[0])
-        return int(year_str)
+            year_value = int(year_str.split('-')[0].split('–')[0])
+        else:
+            year_value = int(year_str)
+            
+        # More restrictive validation: only allow years between 2009 and 2022
+        # This matches our known dataset time range
+        if 2009 <= year_value <= 2022:
+            return year_value
+        return None
     return None
 
 def find_header_row(df: pd.DataFrame) -> Tuple[int, Dict[str, str]]:
@@ -122,24 +136,22 @@ def standardize_column_name(name: str) -> str:
 
 def process_sheet(df: pd.DataFrame, sheet_name: str, file_name: str) -> List[AIHWRecord]:
     """Process a single sheet into AIHW records."""
+    # Find the table title for this sheet
+    table_name = extract_table_name(df, sheet_name)
+    logger.debug(f"Table name: {table_name}")
+    
     records = []
     
-    # Skip empty sheets
-    if df.empty or df.isna().all().all():
-        logger.warning(f"Sheet '{sheet_name}' is empty. Skipping.")
-        return records
-    
-    # Special handling for known time series sheets
-    if sheet_name == 'S3.3':
-        logger.info(f"Using direct extraction for known time series sheet: {sheet_name}")
+    # Special handling for S3.3 sheet (known time series sheet with years 2009-2022)
+    if sheet_name == 'S3.3' and 'AIHW-DEM-02-S3-Mortality' in file_name:
+        logger.info(f"Using special handling for time series sheet {sheet_name}")
         try:
-            # Hardcoded approach for S3.3 which contains Years 2009-2022
-            # The structure is consistent: Year in col 0, metrics in cols 1-9
-            year_idx = 0
-            
-            # We know headers are at row 3 (index 2)
-            df.columns = [f"col_{i}" for i in range(len(df.columns))]
-            data_rows = df.iloc[3:17]  # Years 2009-2022 are in rows 4-17 (index 3-16)
+            # This sheet has years 2009-2022 in column A
+            # Data starts approximately at row 10
+            data_rows = df.iloc[10:].reset_index(drop=True)
+            data_rows = data_rows.dropna(how='all')
+            year_idx = 0  # Year is in column A (index 0)
+            # Years 2009-2022 are in rows 4-17 (index 3-16)
             
             for idx, row in data_rows.iterrows():
                 try:
@@ -149,8 +161,8 @@ def process_sheet(df: pd.DataFrame, sheet_name: str, file_name: str) -> List[AIH
                         continue
                         
                     try:
-                        year = int(str(year_val)[:4])
-                        if 1900 <= year <= datetime.now().year:
+                        year = extract_year(str(year_val))
+                        if year and 2009 <= year <= 2022:
                             # Create records for each metric
                             # Men deaths - col 1
                             if not pd.isna(row.iloc[1]):
@@ -218,6 +230,8 @@ def process_sheet(df: pd.DataFrame, sheet_name: str, file_name: str) -> List[AIH
                                         table_name="Deaths due to dementia in Australia",
                                         condition="Dementia"
                                     ))
+                        else:
+                            logger.warning(f"Invalid year {year_val} in S3.3 row {idx} - outside valid range 2009-2022")
                     except (ValueError, TypeError) as e:
                         logger.warning(f"Error processing year in S3.3 row {idx}: {e}")
                         continue
@@ -542,6 +556,16 @@ def extract_row_metadata(row: pd.Series) -> Dict:
                 continue
             val_str = str(val).strip().lower()
             col_str = str(col).strip().lower()
+            
+            # Skip numeric values that aren't actually years
+            if isinstance(val, (int, float)) or val_str.replace('.', '', 1).isdigit():
+                try:
+                    numeric_value = float(val)
+                    # If it's a large number, it's probably a count/value rather than a year
+                    if numeric_value > 3000:
+                        continue
+                except:
+                    pass
         except:
             continue
         
@@ -551,7 +575,10 @@ def extract_row_metadata(row: pd.Series) -> Dict:
                 # Extract year directly from a year column
                 year_match = re.search(r'(?:19|20)\d{2}', val_str)
                 if year_match:
-                    metadata['year'] = int(year_match.group())
+                    year_value = int(year_match.group())
+                    # More restrictive validation: only allow years between 2009 and 2022
+                    if 2009 <= year_value <= 2022:
+                        metadata['year'] = year_value
                     continue
             except (ValueError, TypeError):
                 pass
@@ -564,10 +591,13 @@ def extract_row_metadata(row: pd.Series) -> Dict:
         elif re.match(r'\d+[-–]\d+|\d+\+|total|all ages', val_str):
             metadata['age_group'] = val_str
         
-        # Extract year if present in a value
+        # Extract year if present in a value - with validation
         elif re.match(r'(?:19|20)\d{2}(?:[-–]\d{2})?', val_str):
             try:
-                metadata['year'] = int(val_str[:4])
+                year_value = int(val_str[:4])
+                # More restrictive validation: only allow years between 2009 and 2022
+                if 2009 <= year_value <= 2022:
+                    metadata['year'] = year_value
             except ValueError:
                 continue
     
@@ -592,16 +622,34 @@ def determine_metric_type(column_name: str, value: float) -> MetricType:
 
 def extract_year_from_table(df: pd.DataFrame, table_name: str) -> Optional[int]:
     """Extract year from table name or data."""
+    
     # Try table name first
     year_match = re.search(r'(?:19|20)\d{2}(?:[-–]\d{2})?', table_name)
     if year_match:
-        return int(year_match.group()[:4])
+        year_value = int(year_match.group()[:4])
+        # More restrictive validation: only allow years between 2009 and 2022
+        if 2009 <= year_value <= 2022:
+            return year_value
     
     # Try column names
     for col in df.columns:
-        year_match = re.search(r'(?:19|20)\d{2}(?:[-–]\d{2})?', str(col))
+        col_str = str(col)
+        # Skip numeric values that aren't actually years
+        if isinstance(col, (int, float)) or (isinstance(col_str, str) and col_str.replace('.', '', 1).isdigit()):
+            try:
+                numeric_value = float(col)
+                # If it's a large number, it's probably a count/value rather than a year
+                if numeric_value > 3000:
+                    continue
+            except:
+                pass
+                
+        year_match = re.search(r'(?:19|20)\d{2}(?:[-–]\d{2})?', col_str)
         if year_match:
-            return int(year_match.group()[:4])
+            year_value = int(year_match.group()[:4])
+            # More restrictive validation: only allow years between 2009 and 2022
+            if 2009 <= year_value <= 2022:
+                return year_value
     
     return None
 
@@ -681,6 +729,15 @@ def process_aihw_excel(file_path: str, output_path: str) -> AIHWDataset:
     
     # Clean up the DataFrame
     if not df.empty:
+        # Filter by valid year range (2009-2022 only)
+        # This is a strict range for which we know we have real data
+        if 'year' in df.columns:
+            original_count = len(df)
+            df = df[(df['year'] >= 2009) & (df['year'] <= 2022)]
+            filtered_count = original_count - len(df)
+            if filtered_count > 0:
+                logger.info(f"Filtered out {filtered_count} records with years outside 2009-2022 range")
+        
         # Sort by year and other relevant columns
         sort_cols = ['year', 'source_sheet', 'sex', 'age_group']
         sort_cols = [col for col in sort_cols if col in df.columns]
@@ -780,8 +837,17 @@ def process_all_aihw_files(raw_dir, processed_dir):
                     # Drop empty columns that provide no value
                     columns_to_drop = ['region', 'indigenous_status', 'notes']
                     df = df.drop(columns=columns_to_drop, errors='ignore')
+                    
+                    # FINAL SAFETY CHECK: Filter only 2009-2022 years regardless of what earlier filtering did
+                    if 'year' in df.columns:
+                        original_count = len(df)
+                        df = df[(df['year'] >= 2009) & (df['year'] <= 2022)]
+                        filtered_count = original_count - len(df)
+                        if filtered_count > 0:
+                            logger.info(f"Final filtering: removed {filtered_count} records with invalid years from {csv_file}")
+                    
                     df.to_csv(output_path, index=False)
-                    logger.info(f"Successfully saved {len(records_data)} records to {csv_file}")
+                    logger.info(f"Successfully saved {len(df)} records to {csv_file}")
                     results[csv_file] = df
                 else:
                     logger.warning(f"No valid records found in {excel_file}")
