@@ -85,6 +85,7 @@ This project investigates the relationship between seed oil intake (focusing on 
   * Table 11 from the CVD dataset for long-term CVD mortality data (1980-2022)
 * Fixed critical issue with Total Supply Calculation by modifying the calculation to use the Grand Total values from FAOSTAT directly, rather than summing across all individual items. This corrected the significantly overestimated values for Total_Calorie_Supply (from ~12,000 to ~3,000-3,200 kcal/day) and Total_Fat_Supply_g (from ~425g to ~110-112g/day).
 * Verified the absence of Diabetes_Treatment_Rate_AgeStandardised in the health_outcome_metrics.csv source file.
+* Fixed issue with missing Diabetes_Treatment_Rate_AgeStandardised data by improving the column detection in health_outcome_metrics.py to handle case variations and provide fallback methods for data extraction.
 
 ### Methodology Adjustments and Assumptions (Unchanged regarding FAOSTAT/LA)
 

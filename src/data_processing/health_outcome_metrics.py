@@ -39,7 +39,7 @@ def load_and_validate_csv(file_path: Path, required_cols: Optional[List[str]] = 
 def extract_ncd_risc_metrics() -> Optional[pd.DataFrame]:
     """Extracts and standardizes metrics from NCD-RisC files."""
     logger.info("Processing NCD-RisC data...")
-    diabetes_df = load_and_validate_csv(PROCESSED_DATA_DIR / 'ncd_risc_diabetes.csv', ['year', 'sex', 'age-standardised_prevalence_of_diabetes_18+_years_'])
+    diabetes_df = load_and_validate_csv(PROCESSED_DATA_DIR / 'ncd_risc_diabetes.csv', ['year', 'sex', 'age-standardised_prevalence_of_diabetes_18+_years_', 'age-standardised_proportion_of_people_with_diabetes_who_were_treated_30+_years_'])
     bmi_df = load_and_validate_csv(PROCESSED_DATA_DIR / 'ncd_risc_bmi_adult.csv', ['year', 'sex', 'prevalence_of_bmi>=30_kg_m²_obesity_'])
     cholesterol_df = load_and_validate_csv(PROCESSED_DATA_DIR / 'ncd_risc_cholesterol.csv', ['year', 'sex', 'mean_total_cholesterol_mmol_l_', 'mean_non-hdl_cholesterol_mmol_l_'])
 
@@ -47,18 +47,61 @@ def extract_ncd_risc_metrics() -> Optional[pd.DataFrame]:
 
     # Diabetes
     if diabetes_df is not None:
-        diabetes_pivot = diabetes_df.pivot_table(
+        # Create separate pivot tables for prevalence and treatment rate
+        diabetes_prev_pivot = diabetes_df.pivot_table(
             index='year',
             columns='sex',
             values='age-standardised_prevalence_of_diabetes_18+_years_'
         ).reset_index()
-        # Ensure Men and Women columns exist before calculating mean
-        if 'Men' in diabetes_pivot.columns and 'Women' in diabetes_pivot.columns:
-             diabetes_pivot['Diabetes_Prevalence_Rate_AgeStandardised'] = diabetes_pivot[['Men', 'Women']].mean(axis=1) * 100 # Convert to percentage
-             metrics_list.append(diabetes_pivot[['year', 'Diabetes_Prevalence_Rate_AgeStandardised']].rename(columns={'year': 'Year'}))
+        
+        diabetes_treat_pivot = diabetes_df.pivot_table(
+            index='year',
+            columns='sex',
+            values='age-standardised_proportion_of_people_with_diabetes_who_were_treated_30+_years_'
+        ).reset_index()
+        
+        # Calculate prevalence rate
+        if 'Men' in diabetes_prev_pivot.columns and 'Women' in diabetes_prev_pivot.columns:
+            diabetes_prev_pivot['Diabetes_Prevalence_Rate_AgeStandardised'] = diabetes_prev_pivot[['Men', 'Women']].mean(axis=1) * 100  # Convert to percentage
+            logger.info("Successfully calculated diabetes prevalence rate")
         else:
-            logger.warning("Could not find 'Men' and 'Women' columns in diabetes data for averaging.")
-
+            logger.warning("Could not find 'Men' and 'Women' columns in diabetes prevalence data for averaging.")
+            logger.info(f"Available columns in diabetes_prev_pivot: {diabetes_prev_pivot.columns.tolist()}")
+            
+        # Calculate treatment rate
+        if 'Men' in diabetes_treat_pivot.columns and 'Women' in diabetes_treat_pivot.columns:
+            diabetes_treat_pivot['Diabetes_Treatment_Rate_AgeStandardised'] = diabetes_treat_pivot[['Men', 'Women']].mean(axis=1) * 100  # Convert to percentage
+            logger.info("Successfully calculated diabetes treatment rate")
+        else:
+            logger.warning("Could not find 'Men' and 'Women' columns in diabetes treatment data for averaging.")
+            logger.info(f"Available columns in diabetes_treat_pivot: {diabetes_treat_pivot.columns.tolist()}")
+            
+            # Alternative approach: if columns exist but have different case or formatting
+            men_col = next((col for col in diabetes_treat_pivot.columns if 'men' in col.lower()), None)
+            women_col = next((col for col in diabetes_treat_pivot.columns if 'women' in col.lower()), None)
+            
+            if men_col and women_col:
+                logger.info(f"Found alternative columns: {men_col} and {women_col}")
+                diabetes_treat_pivot['Diabetes_Treatment_Rate_AgeStandardised'] = diabetes_treat_pivot[[men_col, women_col]].mean(axis=1) * 100  # Convert to percentage
+                logger.info("Successfully calculated diabetes treatment rate using alternative columns")
+            elif len(diabetes_treat_pivot.columns) > 1:  # At least one data column plus 'year'
+                # Get all non-year columns and average them
+                data_cols = [col for col in diabetes_treat_pivot.columns if col != 'year']
+                if data_cols:
+                    logger.info(f"Using all available data columns: {data_cols}")
+                    diabetes_treat_pivot['Diabetes_Treatment_Rate_AgeStandardised'] = diabetes_treat_pivot[data_cols].mean(axis=1) * 100
+                    logger.info("Successfully calculated diabetes treatment rate by averaging all available data")
+            
+        # Merge prevalence and treatment rates
+        diabetes_metrics = pd.DataFrame({
+            'Year': diabetes_prev_pivot['year'],
+            'Diabetes_Prevalence_Rate_AgeStandardised': diabetes_prev_pivot.get('Diabetes_Prevalence_Rate_AgeStandardised', None),
+            'Diabetes_Treatment_Rate_AgeStandardised': diabetes_treat_pivot.get('Diabetes_Treatment_Rate_AgeStandardised', None)
+        })
+        metrics_list.append(diabetes_metrics)
+        logger.info(f"Processed diabetes metrics. Shape: {diabetes_metrics.shape}")
+    else:
+        logger.warning("Could not process diabetes data.")
 
     # BMI/Obesity
     if bmi_df is not None:
@@ -93,7 +136,6 @@ def extract_ncd_risc_metrics() -> Optional[pd.DataFrame]:
             chol_metrics['NonHDL_Cholesterol_AgeStandardised'] = chol_pivot_nonhdl[['Men', 'Women']].mean(axis=1)
 
         metrics_list.append(chol_metrics)
-
 
     # Merge NCD-RisC metrics
     if not metrics_list:

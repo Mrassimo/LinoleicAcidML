@@ -71,4 +71,5 @@
 * **[X] Implemented strict year validation (2009-2022 only) for AIHW data to prevent invalid years from appearing in processed datasets.**
 * **[X] Refined AIHW data extraction to focus on the most relevant sheets: S2.4 for dementia prevalence (2010-2025), S3.5 for dementia mortality (2009-2022), and Table 11 for CVD mortality with complete data from 1980-2022.**
 * **[X] Fixed critical issue with Total Supply Calculation to properly use the Grand Total values from FAOSTAT instead of summing across all individual food items.**
+* **[X] Fixed issue with missing Diabetes_Treatment_Rate_AgeStandardised data by improving the column detection and processing in health_outcome_metrics.py.**
 * (Previous items related to methodology adjustments, LA imputation etc. remain relevant)
