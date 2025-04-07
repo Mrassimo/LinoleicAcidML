@@ -6,7 +6,6 @@ import time
 from pathlib import Path
 from typing import Dict, List, Optional
 import pandas as pd
-from scrape_fire_in_a_bottle import scrape_la_content
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -15,9 +14,11 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 RAW_DATA_DIR = Path("data/raw")
 RAW_DATA_DIR.mkdir(parents=True, exist_ok=True)
 
-# Define the extraction directory for FAOSTAT data
+# Define the extraction directories for FAOSTAT data
 FAOSTAT_EXTRACT_DIR = RAW_DATA_DIR / "faostat_oceania"
+FAOSTAT_HISTORIC_EXTRACT_DIR = RAW_DATA_DIR / "faostat_historic_oceania"
 FAOSTAT_EXTRACT_DIR.mkdir(parents=True, exist_ok=True)
+FAOSTAT_HISTORIC_EXTRACT_DIR.mkdir(parents=True, exist_ok=True)
 
 # Common headers for requests
 DEFAULT_HEADERS = {
@@ -73,6 +74,13 @@ FILES_TO_DOWNLOAD = [
         "filename": "FoodBalanceSheets_E_Oceania.zip",
         "type": "zip",
         "extract": True
+    },
+    {
+        "url": "https://bulks-faostat.fao.org/production/FoodBalanceSheetsHistoric_E_Oceania.zip",
+        "filename": "FoodBalanceSheetsHistoric_E_Oceania.zip",
+        "type": "zip",
+        "extract": True,
+        "specific_files": ["FoodBalanceSheetsHistoric_E_Oceania.csv"]
     }
 ]
 
@@ -129,12 +137,29 @@ def download_file(url: str, destination: Path, headers: Optional[Dict] = None, m
             return False
     return False
 
-def extract_zip(zip_path: Path, extract_to: Path):
-    """Extracts a ZIP file to a specified directory."""
+def extract_zip(zip_path: Path, extract_to: Path, specific_files: Optional[List[str]] = None):
+    """
+    Extracts a ZIP file to a specified directory.
+    
+    Args:
+        zip_path: Path to the ZIP file
+        extract_to: Directory to extract to
+        specific_files: Optional list of specific files to extract. If None, extracts all files.
+    """
     try:
         with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-            zip_ref.extractall(extract_to)
-        logging.info(f"Successfully extracted {zip_path.name} to {extract_to}")
+            if specific_files:
+                # Only extract specified files
+                for file in specific_files:
+                    if file in zip_ref.namelist():
+                        zip_ref.extract(file, extract_to)
+                        logging.info(f"Successfully extracted {file} from {zip_path.name}")
+                    else:
+                        logging.warning(f"File {file} not found in {zip_path.name}")
+            else:
+                # Extract all files
+                zip_ref.extractall(extract_to)
+                logging.info(f"Successfully extracted all files from {zip_path.name}")
     except zipfile.BadZipFile:
         logging.error(f"Error: {zip_path.name} is not a valid ZIP file or is corrupted.")
     except Exception as e:
@@ -158,25 +183,15 @@ def main():
                 successful_downloads.append(filename)
                 # Handle extraction if needed
                 if file_info.get("extract"):
-                    extract_zip(destination_path, FAOSTAT_EXTRACT_DIR)
+                    # Determine extraction directory and specific files
+                    extract_dir = FAOSTAT_HISTORIC_EXTRACT_DIR if "Historic" in filename else FAOSTAT_EXTRACT_DIR
+                    specific_files = file_info.get("specific_files")
+                    extract_zip(destination_path, extract_dir, specific_files)
             else:
                 failed_downloads.append(url)
                 logging.error(f"File validation failed for {filename}")
         else:
             failed_downloads.append(url)
-
-    # Then handle Fire in a Bottle scraping using the existing implementation
-    fiab_url = "https://fireinabottle.net/foods-highest-and-lowest-in-linoleic-acid-n6-pufa/"
-    logging.info("Starting Fire in a Bottle data scraping...")
-    df = scrape_la_content(fiab_url)
-    if df is not None and len(df) > 0:
-        output_file = RAW_DATA_DIR / "fire_in_a_bottle_la_content.csv"
-        df.to_csv(output_file, index=False)
-        successful_downloads.append("fire_in_bottle_la_content.csv")
-        logging.info("Successfully scraped and saved Fire in a Bottle data")
-    else:
-        failed_downloads.append("Fire in a Bottle data")
-        logging.error("Failed to scrape Fire in a Bottle data")
 
     # Print summary
     logging.info("\n--- Download Summary ---")

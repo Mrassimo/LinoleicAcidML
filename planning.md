@@ -2,103 +2,111 @@
 
 ## Project Overview
 
-This project investigates the relationship between seed oil intake (focusing on linoleic acid) and metabolic health outcomes (diabetes, cardiovascular disease, dementia, and mortality) in Australia. The analysis will span from 1980 to the present, leveraging dietary data from 1961 onward where available to provide context. The primary focus is on constructing a robust data asset through extensive data engineering, followed by predictive modeling to explore diet-health relationships.
+This project investigates the relationship between seed oil intake (focusing on linoleic acid, LA) and metabolic health outcomes (diabetes, cholesterol, BMI, CVD mortality, dementia mortality) in Australia. The analysis will primarily cover 1980-present, using FAOSTAT dietary data (available from 1961) for historical context and calculating LA intake. We will leverage long-term mortality data from ABS and modelled prevalence/incidence data from IHME GBD (from 1990) for health outcomes where available. The project emphasizes rigorous data engineering to construct a time-series data asset, followed by explanatory and predictive modeling.
 
 ## Project Phases
 
-### Phase 1: Data Collection & Preparation
+### Phase 1: Data Collection & Initial Preparation (Largely Complete)
 
-- **Objective**: Gather and prepare datasets to enable analysis of linoleic acid intake and health outcomes.
-- **Tasks**:
-  - Scrape linoleic acid content data from the Fire in a Bottle website using FireCrawl.
-  - Download metabolic health and dietary datasets from specified URLs using FireDuck.
-  - Validate data structures with Pydantic to ensure consistency and quality.
-  - Clean and standardize datasets (e.g., convert formats, handle missing values).
-  - Develop a comprehensive data dictionary documenting columns, data types, and key variables.
-  - Plan data merges with Mermaid diagrams to visualize relationships.
-  - Generate detailed data summary reports for all processed datasets.
+* **Objective** : Gather raw datasets and perform initial cleaning, standardization, and validation.
+* **Tasks** :
+  * [X] Scrape/acquire linoleic acid content data (Fire in a Bottle/USDA). Prepare LA content lookup table.
+  * [X] Download NCD-RisC (Diabetes, Cholesterol, BMI) and FAOSTAT datasets.
+  * [ ] Download ABS Causes of Death data cube (Manual Step).
+  * [ ] Download IHME GBD data for Dementia & CVD (Prevalence, Incidence, Deaths rates/numbers, 1990-present) (Manual Step via VizHub tool).
+  * [X] Perform initial cleaning and standardization of NCD-RisC datasets. Use Pydantic for validation where implemented.
+  * [X] Generate initial data summary reports (`reports/processed_data_summary.md`).
 
-### Phase 2: Exploratory Data Analysis (Data Engineering Focus)
+### Phase 2: Feature Engineering & Data Asset Construction
 
-- **Objective**: Construct a unified data asset linking dietary patterns to health outcomes, emphasizing engineering over visualization.
-- **Tasks**:
-  - Analyze each dataset's structure (CSVs and Excel files) to identify mergeable columns (e.g., year, region).
-  - Map FAO food consumption data to linoleic acid content using Fire in a Bottle and Australian Food Composition Database (AFCD) data, potentially with AI-assisted fuzzy matching.
-  - Merge health datasets (NCD-RisC, AIHW) by year (and region where available), focusing on 1980-present.
-  - Create Mermaid diagrams to document join logic and data flow.
-  - Execute merges with FireDuck to build the data asset.
-  - Perform basic validation (e.g., summary stats, missing data checks) to confirm asset quality.
+* **Objective** : Construct the unified time-series data asset linking estimated dietary patterns (esp. LA intake) to health outcomes.
+* **Tasks** :
 
-### Phase 3: Predictive Modeling
+  * [X] Verify and finalize processing of FAOSTAT data for Australia.
+  * [X] Prepare a clean Linoleic Acid content lookup table (`la_food_item | linoleic_acid_g_per_100g`).
+  * [X] Implement and manually validate semantic matching for FAOSTAT items -> LA content. Save validated mapping.
+  * [X] Calculate Derived Dietary Metrics (Total LA Intake g/day, % Calories from LA, Plant Fat Ratio, Total Calories, Fat, Protein, Carbs). Apply methodology adjustments. Save `australia_dietary_metrics.csv`.
+  * [X] Fix Total Supply Calculation by using Grand Total values from FAOSTAT directly, instead of incorrectly summing across all individual items.
 
-- **Objective**: Use the data asset to model relationships between linoleic acid intake and metabolic health outcomes from 1980 onward.
-- **Tasks**:
-  - Apply time series models (e.g., ARIMA) to forecast health trends based on dietary data.
-  - Use regression models (e.g., multiple regression) to quantify the impact of linoleic acid and other factors (e.g., BMI) on health outcomes.
-  - Split data into training (e.g., 1980-2000) and testing (2001-2024) sets for validation.
-  - Generate results highlighting key predictors and model performance.
+  * **Process Health Outcome Data:**
+    * Process **ABS Causes of Death** data cube: Filter Australia, select relevant ICD codes (Dementia/Alzheimer's, IHD, Stroke) across versions, aggregate deaths by year, calculate/extract age-standardized mortality rates (ASMR). Standardize columns. Save `abs_cod_metrics.csv`.
+    * Process downloaded **IHME GBD** CSVs: Load, filter Australia, select key metrics (e.g., age-standardized prevalence/incidence/death rates/numbers for Dementia, IHD, Stroke from 1990+). Standardize columns. Save `gbd_dementia_metrics.csv`, `gbd_cvd_metrics.csv`.
+    * Standardize previously processed **NCD-RisC** data (Diabetes, BMI, Cholesterol).
+  * **Merge Datasets:**
+    * Consolidate all processed health metrics (ABS CoD, GBD, NCD-RisC) into a single dataframe indexed by Year (`health_outcome_metrics.csv` - potentially generated by `health_outcome_metrics.py`).
+    * Merge the consolidated health outcomes with the `australia_dietary_metrics.csv` dataset by `Year`. Handle missing years/data. Save `analytical_merged_data.csv`.
+  * **Feature Engineering (Lags):** Create lagged versions (`_lag5`, `_lag10`, `_lag15`, `_lag20`) of `LA_Intake_percent_calories`. Save `analytical_merged_data_with_lags.csv`.
+  * [X] Perform basic validation (summary stats, missing data checks) on the final merged dataset.
 
-### Phase 4: React visualisation and github pages intergration
+### Phase 3: Modeling and Analysis (Largely Unchanged)
 
-* **Objective**:  begin process of merging with git repo.. to publish all phases.. as a portfolio project
-* generate beautiful graphics and react charts
+* **Objective**: Model and analyze relationships using the final data asset.
+* **Tasks**: EDA, MLR, GAMs, Optional: Time Series Models, Tree-Based Models. Interpret results, document findings and limitations (ecological fallacy, confounders, *data source differences/time ranges*).
+
+### Phase 4: Visualization and Deployment (Unchanged)
+
+* **Objective**: Present findings effectively.
+* **Tasks**: Visualizations, deployment (GitHub Pages).
 
 ## Data Sources
 
-### Metabolic Health Data
+### Metabolic Health Data (Revised)
 
-- **Diabetes**: NCD Risk Factor Collaboration (1980-2024)
-  - URL: [https://ncdrisc.org/downloads/dm-2024/individual-countries/NCD_RisC_Lancet_2024_Diabetes_Australia.csv](https://ncdrisc.org/downloads/dm-2024/individual-countries/NCD_RisC_Lancet_2024_Diabetes_Australia.csv)
-- **Cholesterol**: NCD Risk Factor Collaboration
-  - URL: [https://ncdrisc.org/downloads/chol/individual-countries/Australia.csv](https://ncdrisc.org/downloads/chol/individual-countries/Australia.csv)
-- **Adult BMI**: NCD Risk Factor Collaboration
-  - URL: [https://ncdrisc.org/downloads/bmi-2024/adult/by_country/NCD_RisC_Lancet_2024_BMI_age_standardised_Australia.csv](https://ncdrisc.org/downloads/bmi-2024/adult/by_country/NCD_RisC_Lancet_2024_BMI_age_standardised_Australia.csv)
-- **Dementia Prevalence**: AIHW
-  - URL: [https://www.aihw.gov.au/getmedia/25edf694-fd9b-4f74-bf16-22bbc969a194/AIHW-DEM-02-S2-Prevalence.xlsx](https://www.aihw.gov.au/getmedia/25edf694-fd9b-4f74-bf16-22bbc969a194/AIHW-DEM-02-S2-Prevalence.xlsx)
-- **Dementia Mortality**: AIHW
-  - URL: [https://www.aihw.gov.au/getmedia/e1e90ec9-fc7b-4a7a-a74d-91d7bb4e3ba3/AIHW-DEM-02-S3-Mortality-202409.xlsx](https://www.aihw.gov.au/getmedia/e1e90ec9-fc7b-4a7a-a74d-91d7bb4e3ba3/AIHW-DEM-02-S3-Mortality-202409.xlsx)
-- **Cardiovascular Disease**: AIHW
-  - URL: [https://www.aihw.gov.au/getmedia/76862f38-806d-489e-b85b-7974435bc3d7/AIHW-CVD-92-HSVD-facts-data-tables-12122024.xlsx](https://www.aihw.gov.au/getmedia/76862f38-806d-489e-b85b-7974435bc3d7/AIHW-CVD-92-HSVD-facts-data-tables-12122024.xlsx)
+* **Diabetes Prevalence:** NCD Risk Factor Collaboration (1980-2022) - Modelled
+  * URL: [https://ncdrisc.org/downloads/dm-2024/individual-countries/NCD_RisC_Lancet_2024_Diabetes_Australia.csv](https://ncdrisc.org/downloads/dm-2024/individual-countries/NCD_RisC_Lancet_2024_Diabetes_Australia.csv)
+* **Cholesterol (Total & Non-HDL):** NCD Risk Factor Collaboration (1980-2018) - Modelled
+  * URL: [https://ncdrisc.org/downloads/chol/individual-countries/Australia.csv](https://ncdrisc.org/downloads/chol/individual-countries/Australia.csv)
+* **Adult BMI / Obesity Prevalence:** NCD Risk Factor Collaboration (1990-2022) - Modelled
+  * URL: [https://ncdrisc.org/downloads/bmi-2024/adult/by_country/NCD_RisC_Lancet_2024_BMI_age_standardised_Australia.csv](https://ncdrisc.org/downloads/bmi-2024/adult/by_country/NCD_RisC_Lancet_2024_BMI_age_standardised_Australia.csv)
+* **Dementia & CVD Mortality:** Australian Bureau of Statistics (ABS) Causes of Death (Approx. 1980-Present) - Official Statistics
+  * **Action:** Download main data cube from ABS website.
+  * URL: [https://www.abs.gov.au/statistics/health/causes-death/causes-death-australia](https://www.abs.gov.au/statistics/health/causes-death/causes-death-australia) (Navigate to latest release -> Data Download)
+* **Dementia & CVD Prevalence/Incidence:** Institute for Health Metrics and Evaluation (IHME) Global Burden of Disease (GBD) (1990-Present) - Modelled Estimates
+  * **Action:** Use GBD Results Tool to select Australia, specific causes, relevant measures (Prevalence/Incidence Rates/Numbers), age-standardized, 1990-latest. Download CSVs.
+  * URL: [https://vizhub.healthdata.org/gbd-results/](https://vizhub.healthdata.org/gbd-results/)
 
-### Dietary Data
+### Dietary Data (Unchanged)
 
-- **FAOSTAT Food Balance Sheets**: Food supply data (1961-present)
-  - URL: https://bulks-faostat.fao.org/production/FoodBalanceSheets_E_Oceania.zip (Extract filter for Australia)
-- Linoleic Acid Reference
-- **Fire in a Bottle**: Foods highest/lowest in linoleic acid (firecraw web scrape this table)
-  - URL: [https://fireinabottle.net/foods-highest-and-lowest-in-linoleic-acid-n6-pufa/](https://fireinabottle.net/foods-highest-and-lowest-in-linoleic-acid-n6-pufa/)
+* **FAOSTAT Food Balance Sheets** (Historical & Modern)
+* **Linoleic Acid Reference** (Fire in a Bottle/USDA)
 
-## Data Integration Notes
+## Data Integration Notes (Revised)
 
-- Use ISO3 code (AUS) for consistency across datasets where applicable.
-- Focus joins on the year (1980-present for analysis, 1961-present for dietary context).
-- Leverage state/territory breakdowns where available (e.g., AIHW data).
-- Plan for AI-assisted matching of FAO food categories to linoleic acid content due to broad categorizations (e.g., "vegetable oils").
+* Use Year as primary key for merging. Analysis period focus: 1980-present (note varying start dates for health metrics).
+* Manually validate FAOSTAT -> LA content mapping.
+* Calculate derived dietary metrics (% LA Cals, Plant Fat Ratio). Apply methodology adjustments.
+* Process ABS CoD and IHME GBD data to get annual national-level metrics (ASMRs, prevalence rates/numbers). Standardize column names (e.g., `Dementia_Mortality_Rate_ABS`, `IHD_Prevalence_Rate_GBD`).
+* Consolidate health data (NCD-RisC, ABS CoD, GBD) before merging with dietary data.
+* Implemented special processing for AIHW time series sheets (S3.3, S3.5) to extract historical dementia mortality data (2009-2022) with appropriate year assignments.
+* Applied strict year validation (2009-2022 only) for AIHW datasets to ensure data quality and remove implausible years from the processed output.
+* Focused AIHW data processing on the most valuable data sheets:
+  * Sheet S2.4 from dementia prevalence (2010-2025 projections)
+  * Sheet S3.5 from dementia mortality (2009-2022)
+  * Table 11 from the CVD dataset for long-term CVD mortality data (1980-2022)
+* Fixed critical issue with Total Supply Calculation by modifying the calculation to use the Grand Total values from FAOSTAT directly, rather than summing across all individual items. This corrected the significantly overestimated values for Total_Calorie_Supply (from ~12,000 to ~3,000-3,200 kcal/day) and Total_Fat_Supply_g (from ~425g to ~110-112g/day).
+* Verified the absence of Diabetes_Treatment_Rate_AgeStandardised in the health_outcome_metrics.csv source file.
 
-### Data Cleaning and Standardisation
+### Methodology Adjustments and Assumptions (Unchanged regarding FAOSTAT/LA)
 
-- AIHW datasets have been cleaned to remove empty columns ('region', 'indigenous_status', 'notes') that provided no analytical value.
-- A comprehensive data summary report (`reports/processed_data_summary.md`) has been generated containing:
-  - Dataset overviews (rows, columns, memory usage)
-  - Detailed column information and statistics
-  - Value distributions and sample data
-  - Missing value analysis
-  - Data quality metrics
-- Standard column names have been implemented across datasets to facilitate merging:
-  - year: Temporal reference
-  - value: Numeric measurements
-  - metric_type: Type of measurement
-  - sex: Gender categories
-  - age_group: Age brackets
-  - condition: Health condition or measurement type
-  - source_sheet: Original data source
+* (Keep FAOSTAT processing assumptions)
+* (Keep LA content adjustments/assumptions - noting previous advice on cap/missing)
+* (Keep FAOSTAT methodology change handling)
+* (Keep Plant Fat classification)
 
-## Expected Outcomes
+## Expected Outcomes (Revised)
 
-- A unified data asset linking Australian dietary patterns (1961-present) to metabolic health outcomes (1980-present).
-- Predictive models identifying key dietary drivers of health trends.
-- Comprehensive documentation including:
-  - Data dictionary
-  - Mermaid diagrams
-  - Detailed data quality reports
-  - Processing methodology documentation
+* A unified time-series data asset (`analytical_merged_data_with_lags.csv`) linking Australian dietary patterns (esp. % calories from LA, etc.) to metabolic health outcomes.
+  * NCD-RisC metrics (Diabetes, BMI, Cholesterol) available from ~1980.
+  * ABS CoD metrics (Dementia/CVD Mortality) available from ~1980.
+  * IHME GBD metrics (Dementia/CVD Prevalence/Incidence) available from 1990.
+* Explanatory/Predictive Models analyzing associations, accounting for varying time ranges of outcomes.
+* Comprehensive documentation, including processing of ABS/GBD data, limitations (modelled data, ICD changes), and visualizations.
+* Portfolio-ready project.
+
+## Current Status (April 2025)
+
+* [X] Completed data processing and integration for dietary metrics
+* [X] Fixed critical issue with Total Supply Calculation
+* [X] Generated final analytical dataset with correct calorie and macronutrient values
+* [X] Performed initial validation of the dataset structure
+* [ ] Proceeding to exploratory data analysis and modeling phases

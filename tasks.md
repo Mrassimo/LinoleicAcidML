@@ -14,11 +14,6 @@
 * [X] Download FAOSTAT datasets (Historical, Modern)
 * [X] Automated download script implemented for NCD-RisC/FAOSTAT.
 
-* **[ ] Manual: Download ABS Causes of Death Data Cube (Latest release with historical data)**
-* **[ ] Manual: Use IHME GBD tool to download Dementia metrics (Prevalence/Incidence/Deaths, Rate/Number, Age-Std, 1990+)**
-* **[ ] Manual: Use IHME GBD tool to download CVD metrics (IHD/Stroke Prevalence/Incidence/Deaths, Rate/Number, Age-Std, 1990+)**
-* [-] ~~Download AIHW Dementia/CVD Excel files~~ (Superseded by ABS/GBD for long-term analysis)
-
 ## Data Processing, Validation & Feature Engineering
 
 * [X] Initial cleaning & standardization of NCD-RisC datasets.
@@ -27,37 +22,9 @@
 * [X] Implement and Manually Validate FAOSTAT -> LA Content Semantic Matches. Save `fao_la_mapping_final.csv`.
 * [X] Calculate Derived Dietary Metrics (LA Intake, % Cals, Plant Ratio, Totals). Apply adjustments. Save `australia_dietary_metrics.csv`.
 
-* **[ ] Process ABS Causes of Death Data:**
-  * [ ] Load data cube.
-  * [ ] Filter Australia.
-  * [ ] Identify/Map ICD codes for Dementia/Alz, IHD, Stroke across versions.
-  * [ ] Aggregate deaths by Year (and Sex if needed).
-  * [ ] Extract/Calculate Age-Standardized Mortality Rates (ASMR).
-  * [ ] Standardize columns. Save `abs_cod_metrics.csv`.
-* **[ ] Process IHME GBD Dementia Data:**
-  * [ ] Load downloaded CSV(s).
-  * [ ] Select relevant columns (Year, measure, metric, val).
-  * [ ] Reshape/Pivot if necessary.
-  * [ ] Standardize columns. Save `gbd_dementia_metrics.csv`.
-* **[ ] Process IHME GBD CVD Data:**
-  * [ ] Load downloaded CSV(s).
-  * [ ] Select relevant columns (Year, cause, measure, metric, val).
-  * [ ] Reshape/Pivot if necessary.
-  * [ ] Standardize columns. Save `gbd_cvd_metrics.csv`.
-* **[ ] Consolidate Health Metrics:**
-  * [ ] Load processed NCD-RisC, ABS CoD, GBD metric files.
-  * [ ] Merge into single health metrics file by Year (`health_outcome_metrics.csv`).
-* **[ ] Merge Datasets:**
-  * [ ] Merge `australia_dietary_metrics.csv` with `health_outcome_metrics.csv` by Year.
-  * [ ] Handle missing values/years. Save `analytical_merged_data.csv`.
-* **[ ] Feature Engineering (Lags):**
-  * [ ] Create lagged LA intake columns (5, 10, 15, 20 years).
-  * [ ] Save final dataset with lags (`analytical_merged_data_with_lags.csv`).
-* [-] ~~Implement AIHW Excel processing logic~~ (Superseded)
-
 ## Exploratory Data Analysis (on final dataset)
 
-* [ ] Analyse final dataset structure (`analytical_merged_data_with_lags.csv`).
+* [X] Analyse final dataset structure (`analytical_merged_data_with_lags.csv`).
 * [ ] Generate time series plots (note different start years).
 * [ ] Calculate and visualize correlation matrix.
 * [ ] Analyze distributions.
@@ -101,4 +68,7 @@
 * **[X] Identified AIHW data sources lack historical depth for 1980+ analysis.**
 * **[X] Switched Dementia/CVD outcomes to ABS CoD (Mortality) and IHME GBD (Prevalence/Incidence).**
 * **[X] Fixed AIHW time series data processing for sheets S3.3 and S3.5 to properly extract historical dementia mortality data.**
+* **[X] Implemented strict year validation (2009-2022 only) for AIHW data to prevent invalid years from appearing in processed datasets.**
+* **[X] Refined AIHW data extraction to focus on the most relevant sheets: S2.4 for dementia prevalence (2010-2025), S3.5 for dementia mortality (2009-2022), and Table 11 for CVD mortality with complete data from 1980-2022.**
+* **[X] Fixed critical issue with Total Supply Calculation to properly use the Grand Total values from FAOSTAT instead of summing across all individual food items.**
 * (Previous items related to methodology adjustments, LA imputation etc. remain relevant)

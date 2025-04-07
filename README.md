@@ -27,17 +27,18 @@ This project investigates the relationship between seed oil intake (focusing on 
 ## Setup
 
 1. Create a virtual environment:
+
    ```bash
    python -m venv venv
    source venv/bin/activate  # On Windows: venv\Scripts\activate
    ```
-
 2. Install dependencies:
+
    ```bash
    pip install -r requirements.txt
    ```
-
 3. Run the ETL pipeline:
+
    ```bash
    python src/run_etl.py
    ```
@@ -45,10 +46,11 @@ This project investigates the relationship between seed oil intake (focusing on 
 ## Data Sources
 
 The project uses data from:
+
 - NCD Risk Factor Collaboration (Diabetes, Cholesterol, BMI)
 - Australian Institute of Health and Welfare (Dementia, CVD)
 - FAOSTAT Food Balance Sheets
-- Fire in a Bottle (Linoleic acid content)
+- Fire in a Bottle (Linoleic acid content derived from - [U.S. Department of Agriculture](https://www.usda.gov/))
 
 For detailed information about data sources and project planning, see `planning.md`.
 
@@ -58,4 +60,4 @@ See `tasks.md` for current development status and upcoming tasks.
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details. 
+This project is licensed under the MIT License - see the LICENSE file for details.
