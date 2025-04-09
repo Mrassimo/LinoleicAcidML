@@ -5,7 +5,7 @@ Update the FAO-LA mapping with validated matches.
 import pandas as pd
 import logging
 from pathlib import Path
-from data_processing.validation_utils import (
+from .validation_utils import (
     get_manual_mapping,
     find_closest_match,
     get_la_content_for_item,
@@ -98,7 +98,7 @@ def main():
     
     # Load LA content data to get LA values
     logger.info("Loading LA content data")
-    la_content_df = pd.read_csv('data/processed/fire_in_a_bottle_la_content.csv')
+    la_content_df = pd.read_csv('data/processed/la_content_fireinabottle_processed.csv')
     
     # Add LA content values using utility function
     validation_df['la_content_per_100g'] = validation_df['matched_la_item'].apply(
@@ -106,7 +106,7 @@ def main():
     )
     
     # Save the updated validation
-    output_path = 'data/processed/fao_la_mapping_final.csv'
+    output_path = 'data/processed/fao_la_mapping_validated.csv'
     validation_df.to_csv(output_path, index=False)
     logger.info(f"Saved updated mapping to {output_path}")
     

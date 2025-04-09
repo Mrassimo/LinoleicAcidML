@@ -39,9 +39,9 @@ def load_and_validate_csv(file_path: Path, required_cols: Optional[List[str]] = 
 def extract_ncd_risc_metrics() -> Optional[pd.DataFrame]:
     """Extracts and standardizes metrics from NCD-RisC files."""
     logger.info("Processing NCD-RisC data...")
-    diabetes_df = load_and_validate_csv(PROCESSED_DATA_DIR / 'ncd_risc_diabetes.csv', ['year', 'sex', 'age-standardised_prevalence_of_diabetes_18+_years_', 'age-standardised_proportion_of_people_with_diabetes_who_were_treated_30+_years_'])
-    bmi_df = load_and_validate_csv(PROCESSED_DATA_DIR / 'ncd_risc_bmi_adult.csv', ['year', 'sex', 'prevalence_of_bmi>=30_kg_m²_obesity_'])
-    cholesterol_df = load_and_validate_csv(PROCESSED_DATA_DIR / 'ncd_risc_cholesterol.csv', ['year', 'sex', 'mean_total_cholesterol_mmol_l_', 'mean_non-hdl_cholesterol_mmol_l_'])
+    diabetes_df = load_and_validate_csv(PROCESSED_DATA_DIR / 'ncdrisc_diabetes_australia_processed.csv', ['year', 'sex', 'age-standardised_prevalence_of_diabetes_18+_years_', 'age-standardised_proportion_of_people_with_diabetes_who_were_treated_30+_years_'])
+    bmi_df = load_and_validate_csv(PROCESSED_DATA_DIR / 'ncdrisc_bmi_australia_processed.csv', ['year', 'sex', 'prevalence_of_bmi>=30_kg_m²_obesity_'])
+    cholesterol_df = load_and_validate_csv(PROCESSED_DATA_DIR / 'ncdrisc_cholesterol_australia_processed.csv', ['year', 'sex', 'mean_total_cholesterol_mmol_l_', 'mean_non-hdl_cholesterol_mmol_l_'])
 
     metrics_list = []
 
@@ -155,13 +155,17 @@ def extract_aihw_metrics() -> Optional[pd.DataFrame]:
     all_aihw_metrics = []
 
     # Dementia Prevalence (Number) - From S2.4
-    prev_df = load_and_validate_csv(PROCESSED_DATA_DIR / 'aihw_dementia_prevalence.csv', ['year', 'value', 'source_sheet', 'sex'])
+    prev_df = load_and_validate_csv(PROCESSED_DATA_DIR / 'aihw_dementia_prevalence_australia_processed.csv', ['year', 'value', 'source_sheet', 'sex'])
     if prev_df is not None:
+        # Log unique sex values before filtering Dementia Prevalence
+        logger.debug(f"Dementia Prevalence - unique 'sex' values before filtering: {prev_df['sex'].unique().tolist()}")
         # Filter specifically for sheet S2.4 and persons
         dementia_prev = prev_df[
             (prev_df['source_sheet'] == 'S2.4') &
             (prev_df['sex'] == 'persons')
         ].copy()
+        # Log shape after filtering Dementia Prevalence
+        logger.debug(f"Dementia Prevalence - filtered dataframe shape: {dementia_prev.shape}")
         if not dementia_prev.empty:
             dementia_prev = dementia_prev[['year', 'value']].rename(columns={'year': 'Year', 'value': 'Dementia_Prevalence_Number'})
             # Ensure no duplicate years
@@ -169,42 +173,50 @@ def extract_aihw_metrics() -> Optional[pd.DataFrame]:
             all_aihw_metrics.append(dementia_prev)
             logger.info(f"Extracted Dementia Prevalence (Number): {dementia_prev.shape[0]} rows")
         else:
-            logger.warning("No 'persons' data found in aihw_dementia_prevalence.csv from sheet S2.4.")
+            logger.warning("No 'persons' data found in aihw_dementia_prevalence_australia_processed.csv from sheet S2.4.")
 
     # Dementia Mortality (Age-Standardised Rate) - From S3.5
-    mort_df = load_and_validate_csv(PROCESSED_DATA_DIR / 'aihw_dementia_mortality.csv', ['year', 'value', 'source_sheet', 'metric_type', 'sex'])
+    mort_df = load_and_validate_csv(PROCESSED_DATA_DIR / 'aihw_dementia_mortality_australia_processed.csv', ['year', 'value', 'source_sheet', 'metric_type', 'sex'])
     if mort_df is not None:
+        # Log unique sex values before filtering Dementia Mortality
+        logger.debug(f"Dementia Mortality - unique 'sex' values before filtering: {mort_df['sex'].unique().tolist()}")
         # Filter specifically for sheet S3.5, standardised rate, and persons
         dementia_mort = mort_df[
             (mort_df['source_sheet'] == 'S3.5') &
             (mort_df['metric_type'] == 'standardised_rate') &
             (mort_df['sex'] == 'persons')
         ].copy()
+        # Log shape after filtering Dementia Mortality
+        logger.debug(f"Dementia Mortality - filtered dataframe shape: {dementia_mort.shape}")
         if not dementia_mort.empty:
             dementia_mort = dementia_mort[['year', 'value']].rename(columns={'year': 'Year', 'value': 'Dementia_Mortality_Rate_ASMR'})
             dementia_mort = dementia_mort.drop_duplicates(subset=['Year'], keep='first')
             all_aihw_metrics.append(dementia_mort)
             logger.info(f"Extracted Dementia Mortality (ASMR): {dementia_mort.shape[0]} rows")
         else:
-            logger.warning("No 'persons' standardised rate data found in aihw_dementia_mortality.csv from sheet S3.5.")
+            logger.warning("No 'persons' standardised rate data found in aihw_dementia_mortality_australia_processed.csv from sheet S3.5.")
 
 
     # CVD Mortality (Age-Standardised Rate) - From Table 11 in aihw_cvd_all_facts.csv
-    cvd_df = load_and_validate_csv(PROCESSED_DATA_DIR / 'aihw_cvd_all_facts.csv', ['year', 'value', 'source_sheet', 'metric_type', 'sex'])
+    cvd_df = load_and_validate_csv(PROCESSED_DATA_DIR / 'aihw_cvd_metrics_australia_processed.csv', ['year', 'value', 'source_sheet', 'metric_type', 'sex'])
     if cvd_df is not None:
+        # Log unique sex values before filtering CVD Mortality
+        logger.debug(f"CVD Mortality - unique 'sex' values before filtering: {cvd_df['sex'].unique().tolist()}")
         # Filter specifically for Table 11, standardised rate, and persons
         cvd_mort = cvd_df[
             (cvd_df['source_sheet'] == 'Table 11') &
             (cvd_df['metric_type'] == 'standardised_rate') &
             (cvd_df['sex'] == 'persons')
         ].copy()
+        # Log shape after filtering CVD Mortality
+        logger.debug(f"CVD Mortality - filtered dataframe shape: {cvd_mort.shape}")
         if not cvd_mort.empty:
             cvd_mort = cvd_mort[['year', 'value']].rename(columns={'year': 'Year', 'value': 'CVD_Mortality_Rate_ASMR'})
             cvd_mort = cvd_mort.drop_duplicates(subset=['Year'], keep='first')
             all_aihw_metrics.append(cvd_mort)
             logger.info(f"Extracted CVD Mortality (ASMR): {cvd_mort.shape[0]} rows")
         else:
-             logger.warning("No 'persons' standardised rate data found in aihw_cvd_all_facts.csv from Table 11.")
+             logger.warning("No 'persons' standardised rate data found in aihw_cvd_metrics_australia_processed.csv from Table 11.")
 
 
     # Merge AIHW metrics
@@ -243,7 +255,7 @@ def main():
     merged_health_df = merged_health_df.sort_values('Year').reset_index(drop=True)
 
     # Save the merged health metrics
-    output_path = PROCESSED_DATA_DIR / 'health_outcome_metrics.csv'
+    output_path = PROCESSED_DATA_DIR / 'health_metrics_australia_combined.csv'
     try:
         merged_health_df.to_csv(output_path, index=False)
         logger.info(f"Merged health metrics saved successfully to {output_path}")

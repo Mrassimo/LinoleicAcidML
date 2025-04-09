@@ -4,7 +4,7 @@ import pytest
 import pandas as pd
 import os
 from datetime import datetime
-from src.process_aihw_data import (
+from src.data_processing.process_aihw_data import (
     find_header_row,
     clean_column_name,
     transform_sheet_data,
@@ -203,3 +203,24 @@ def test_process_aihw_excel(temp_excel_file, tmp_path):
         assert pd.api.types.is_numeric_dtype(result['rate'])
     if 'number' in result.columns:
         assert pd.api.types.is_numeric_dtype(result['number']) 
+
+def test_sex_assignment_special_sheets():
+    """Test special handling of 'sex' assignment for sheets S2.4 and Table 11."""
+    import pandas as pd
+    # Dummy data without explicit sex column
+    data = {
+        'Year': [2020],
+        'Value': [5.0]
+    }
+    df = pd.DataFrame(data)
+
+    # Test for sheet 'S2.4'
+    df_s2_4 = transform_sheet_data(df.copy(), 'S2.4')
+    assert 'sex' in df_s2_4.columns
+    # Assuming logic assigns 'all' or 'persons' (adjust if needed)
+    assert df_s2_4['sex'].iloc[0] in ('all', 'persons')
+
+    # Test for sheet 'Table 11'
+    df_table11 = transform_sheet_data(df.copy(), 'Table 11')
+    assert 'sex' in df_table11.columns
+    assert df_table11['sex'].iloc[0] in ('all', 'persons')

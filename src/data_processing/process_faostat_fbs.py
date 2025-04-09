@@ -194,6 +194,8 @@ def clean_faostat_data(input_files: list, output_file: str):
             chunks = pd.read_csv(file, chunksize=5000)
             
             file_dfs = []
+            # Define required columns for a valid processed chunk
+            required_chunk_cols = ['area', 'item', 'element', 'year', 'value', 'unit']
             for chunk in chunks:
                 logger.info(f"Processing chunk with {len(chunk)} rows")
                 # Basic cleaning
@@ -226,25 +228,22 @@ def clean_faostat_data(input_files: list, output_file: str):
                 chunk.columns = [col.lower() for col in chunk.columns]
                 
                 # Keep only essential columns
-                essential_cols = ['area_code', 'area', 'item_code', 'item', 'element_code', 
-                                'element', 'year', 'value', 'unit', 'data_type']
-                available_cols = [col for col in essential_cols if col in chunk.columns]
-                
-                if not all(col in available_cols for col in ['year', 'value']):
-                    logger.warning(f"Missing required columns in chunk. Available: {available_cols}")
-                    continue
-                    
-                chunk = chunk[available_cols]
-                
                 # Filter for Australia only
                 if 'area' in chunk.columns:
                     chunk = chunk[chunk['area'].str.lower() == 'australia']
+
+                # Filter columns after all processing to avoid dropping added columns prematurely
+                
+                    
                 
                 # Skip empty chunks
                 if len(chunk) == 0:
                     continue
                     
-                file_dfs.append(chunk)
+                if not chunk.empty and all(col in chunk.columns for col in required_chunk_cols):
+                    file_dfs.append(chunk)
+                else:
+                    logger.warning(f"Skipping chunk from {file} due to missing required columns after processing. Columns present: {chunk.columns.tolist()}")
             
             if file_dfs:
                 df = pd.concat(file_dfs, ignore_index=True)
@@ -276,10 +275,19 @@ def clean_faostat_data(input_files: list, output_file: str):
         # Drop rows with missing essential data
         combined_df = combined_df.dropna(subset=['year', 'value', 'element'])
         logger.info(f"After dropping NA, data shape: {combined_df.shape}")
+        # Log columns present before sorting and duplicate removal for debugging missing 'data_type' issues
+        logger.info(f"Columns before FAOSTAT duplicate removal: {combined_df.columns.tolist()}")
+
+        # Sort and remove duplicates based on year, item, and element to ensure data integrity before pivoting
+        combined_df.sort_values(by=['year', 'item', 'element'], inplace=True)
+        before_dedup_len = len(combined_df)
+        combined_df.drop_duplicates(subset=['year', 'item', 'element'], keep='first', inplace=True)
+        duplicates_removed = before_dedup_len - len(combined_df)
+        logger.info(f"Removed {duplicates_removed} duplicate records from FAOSTAT data")
         
         # Create pivot table for easier analysis
         pivot_df = combined_df.pivot_table(
-            index=['year', 'item', 'data_type'],
+            index=['year', 'item'],
             columns='element',
             values='value',
             aggfunc='first'
@@ -295,8 +303,5 @@ def clean_faostat_data(input_files: list, output_file: str):
 
 if __name__ == "__main__":
     data_dir = Path("data/processed")
-    historical_file = Path("data/raw/faostat_oceania/FoodBalanceSheets_E_Oceania_NOFLAG.csv")
-    modern_file = data_dir / "faostat_fbs_australia.csv"
-    output_file = data_dir / "faostat_fbs_australia_clean.csv"
-    
-    clean_faostat_data([historical_file, modern_file], output_file)
+    # Deprecated intermediate files removed from processing pipeline
+    # Final processed FAOSTAT FBS data is now saved elsewhere

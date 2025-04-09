@@ -3,7 +3,7 @@ from pydantic import ValidationError
 from datetime import datetime
 from pathlib import Path
 import pandas as pd
-from src.process_faostat_fbs import (
+from src.data_processing.process_faostat_fbs import (
     FBSBase,
     FoodBalanceSchema,
     validate_fbs_data,

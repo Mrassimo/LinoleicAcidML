@@ -336,8 +336,9 @@ def main(force_processing=False):
     logger.info("=== Starting dataset merge process ===")
     
     # Define paths
-    faostat_path = 'data/processed/faostat_fbs_australia_clean.csv'
-    fire_path = 'data/processed/fire_in_a_bottle_la_content.csv'
+    # Deprecated intermediate FAOSTAT file removed
+    faostat_path = None
+    fire_path = 'data/processed/la_content_fireinabottle_processed.csv'
     output_path = 'data/processed/merged_faostat_fire.csv'
     feather_path = 'data/processed/merged_faostat_fire.feather'
     stats_path = 'data/processed/merge_statistics.csv'

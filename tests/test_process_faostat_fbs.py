@@ -1,6 +1,6 @@
 import pytest
 import pandas as pd
-from src.process_faostat_fbs import clean_faostat_fbs, FAOSTATFBSEntry
+from src.data_processing.process_faostat_fbs import clean_faostat_fbs, FAOSTATFBSEntry
 import os
 
 @pytest.fixture
@@ -77,7 +77,6 @@ def test_pydantic_validation(sample_data, tmp_path):
 
 def test_missing_value_handling(tmp_path):
     """Test that rows with missing values are dropped."""
-    # Create test data with missing values
     test_data = pd.DataFrame({
         'area_code': [10, 10],
         'area': ['Australia', 'Australia'],
@@ -101,3 +100,28 @@ def test_missing_value_handling(tmp_path):
     # Should have 2 rows (one valid for each year)
     assert len(result) == 2
     assert result['value'].notna().all()
+
+def test_duplicate_removal(tmp_path):
+    """Test that duplicate rows are removed during cleaning."""
+    df = pd.DataFrame({
+        'area_code': [10, 10],
+        'area': ['Australia', 'Australia'],
+        'item_code': [2901, 2901],
+        'item': ['Grand Total', 'Grand Total'],
+        'element_code': [664, 664],
+        'element': ['Food supply', 'Food supply'],
+        'unit': ['kcal/cap/d', 'kcal/cap/d'],
+        'y2010': [3500.0, 3500.0],
+        'y2010F': ['E', 'E'],
+        'y2011': [3600.0, 3600.0],
+        'y2011F': ['E', 'E']
+    })
+    input_path = os.path.join(tmp_path, 'dup_input.csv')
+    df.to_csv(input_path, index=False)
+
+    output_path = os.path.join(tmp_path, 'dup_output.csv')
+    result = clean_faostat_fbs(input_path, output_path)
+
+    # There should be only 2 rows (one per year) after duplicate removal
+    # not 4 rows (2 duplicates x 2 years)
+    assert len(result) == 2

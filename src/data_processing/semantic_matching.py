@@ -82,11 +82,11 @@ def load_data() -> Tuple[pd.DataFrame, pd.DataFrame]:
         processed_dir = data_dir / 'processed'
         
         # Load FAOSTAT data
-        fao_path = processed_dir / 'faostat_food_balance_sheets.csv'
+        fao_path = processed_dir / 'faostat_fbs_australia_processed.csv'
         fao_df = pd.read_csv(fao_path)
         
         # Load LA content data
-        la_path = processed_dir / 'fire_in_a_bottle_la_content.csv'
+        la_path = processed_dir / 'la_content_fireinabottle_processed.csv'
         la_df = pd.read_csv(la_path)
         
         return fao_df, la_df
@@ -144,7 +144,7 @@ def main():
     
     # Create and save mapping table
     mapping_df = pd.DataFrame(matches)
-    output_path = Path('data') / 'processed' / 'fao_la_mapping.csv'
+    output_path = Path('data') / 'processed' / 'fao_la_mapping_semantic_matches.csv'
     mapping_df.to_csv(output_path, index=False)
     logger.info(f"Saved mapping table to {output_path}")
     

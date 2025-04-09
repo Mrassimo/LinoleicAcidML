@@ -40,12 +40,19 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Import project modules
-from data_processing.process_raw_data import process_excel_file
-from data_processing.process_faostat_fbs import clean_faostat_data
-from data_processing.scrape_fire_in_bottle import scrape_la_content, save_to_csv, URL
-from data_processing.process_aihw_data import process_aihw_excel
-from data_processing.validation_utils import get_la_content_for_item
-from data_processing.update_validation import create_validation_data
+from .data_processing.process_faostat_fbs import clean_faostat_data
+from .data_processing.scrape_fire_in_bottle import scrape_la_content, save_to_csv, URL
+from .data_processing.process_aihw_data import process_aihw_excel
+from .data_processing.validation_utils import get_la_content_for_item
+from .data_processing.update_validation import create_validation_data
+from .data_processing.calculate_dietary_metrics import calculate_dietary_metrics as calculate_dietary_metrics_main
+from .data_processing.health_outcome_metrics import main as health_outcome_metrics_main
+from .data_processing.merge_health_dietary import main as merge_health_dietary_main
+try:
+    from . import download_data
+except ImportError:
+    download_data = None
+
 
 # Define paths
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -63,17 +70,11 @@ REPORT_DIR.mkdir(parents=True, exist_ok=True)
 def run_downloads():
     """Run the download script to fetch all raw data files."""
     logger.info("=== Downloading raw data files ===")
+    if download_data is None:
+        logger.error("download_data module not found.")
+        return False
     try:
-        # Import the download_data module
-        spec = importlib.util.spec_from_file_location(
-            "download_data", 
-            os.path.join(os.path.dirname(__file__), "download_data.py")
-        )
-        download_module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(download_module)
-        
-        # Run the download script
-        download_module.main()
+        download_data.main()
         logger.info("Download process completed")
         return True
     except Exception as e:
@@ -85,11 +86,10 @@ def process_ncd_risc_csvs():
     logger.info("=== Processing NCD-RisC datasets ===")
     
     ncd_files = [
-        ("NCD_RisC_Lancet_2024_Diabetes_Australia.csv", "ncd_risc_diabetes.csv"),
-        ("NCD_RisC_Cholesterol_Australia.csv", "ncd_risc_cholesterol.csv"),
-        ("NCD_RisC_Lancet_2024_BMI_age_standardised_Australia.csv", "ncd_risc_bmi_adult.csv")
+        ("NCD_RisC_Lancet_2024_Diabetes_Australia.csv", "ncdrisc_diabetes_australia_processed.csv"),
+        ("NCD_RisC_Cholesterol_Australia.csv", "ncdrisc_cholesterol_australia_processed.csv"),
+        ("NCD_RisC_Lancet_2024_BMI_age_standardised_Australia.csv", "ncdrisc_bmi_australia_processed.csv")
     ]
-    
     for input_filename, output_filename in ncd_files:
         input_path = RAW_DATA_DIR / input_filename
         output_path = PROCESSED_DATA_DIR / output_filename
@@ -133,11 +133,10 @@ def process_aihw_excel_files():
     logger.info("=== Processing AIHW Excel files ===")
     
     aihw_files = [
-        ("AIHW-DEM-02-S2-Prevalence.xlsx", "aihw_dementia_prevalence.csv"),
-        ("AIHW-DEM-02-S3-Mortality-202409.xlsx", "aihw_dementia_mortality.csv"),
-        ("AIHW-CVD-92-HSVD-facts-data-tables-12122024.xlsx", "aihw_cvd_all_facts.csv")
+        ("AIHW-DEM-02-S2-Prevalence.xlsx", "aihw_dementia_prevalence_australia_processed.csv"),
+        ("AIHW-DEM-02-S3-Mortality-202409.xlsx", "aihw_dementia_mortality_australia_processed.csv"),
+        ("AIHW-CVD-92-HSVD-facts-data-tables-12122024.xlsx", "aihw_cvd_metrics_australia_processed.csv")
     ]
-    
     for input_filename, output_filename in aihw_files:
         input_path = RAW_DATA_DIR / input_filename
         output_path = PROCESSED_DATA_DIR / output_filename
@@ -165,222 +164,56 @@ def process_aihw_excel_files():
         except Exception as e:
             logger.error(f"Error processing {input_filename}: {e}")
 
-def process_faostat_data(force_processing=False):
+def process_faostat_data(force_processing: bool = False):
     """
-    Process FAOSTAT data.
-    
+    Process FAOSTAT data by directly cleaning raw data directories.
+
     Args:
-        force_processing: If True, process the data even if output files already exist
+        force_processing: If True, process the data even if output file already exists
     """
     logger.info("=== Processing FAOSTAT data ===")
-    
-    # Define paths for both current and historical data
+
     faostat_dir = RAW_DATA_DIR / "faostat_oceania"
     faostat_historic_dir = RAW_DATA_DIR / "faostat_historic_oceania"
-    
-    # Staging paths for intermediate files
-    combined_current_staging = STAGING_DATA_DIR / "faostat_fbs_current_combined.csv"
-    combined_historic_staging = STAGING_DATA_DIR / "faostat_fbs_historic_combined.csv"
-    
-    # Final output path - single cleaned file containing all FAOSTAT data
-    final_output_path = PROCESSED_DATA_DIR / "faostat_food_balance_sheets.csv"
-    
+    final_output_path = PROCESSED_DATA_DIR / "faostat_fbs_australia_processed.csv"
+
+    logger.debug(f"Checking FAOSTAT skip: force={force_processing}, exists={final_output_path.exists()}")
     if not force_processing and final_output_path.exists():
         logger.info(f"Using existing cleaned FAOSTAT data: {final_output_path}")
         return
-    
-    # Process current FAOSTAT data
-    if not faostat_dir.exists():
+
+    # Gather all CSV files from FAOSTAT directories
+    input_files = []
+    if faostat_dir.exists():
+        input_files.extend(list(faostat_dir.glob("*.csv")))
+    else:
         logger.warning(f"FAOSTAT directory not found: {faostat_dir}")
+
+    if faostat_historic_dir.exists():
+        input_files.extend(list(faostat_historic_dir.glob("*.csv")))
     else:
-        process_faostat_directory(
-            faostat_dir,
-            combined_current_staging,
-            data_type="current"
-        )
-    
-    # Process historical FAOSTAT data
-    if not faostat_historic_dir.exists():
         logger.warning(f"FAOSTAT historical directory not found: {faostat_historic_dir}")
-    else:
-        process_faostat_directory(
-            faostat_historic_dir,
-            combined_historic_staging,
-            data_type="historical"
-        )
-    
-    # Combine and clean both datasets
-    success = False
+
+    if not input_files:
+        logger.error("No FAOSTAT data directories found to process")
+        return
+
     try:
-        logger.info("Combining and cleaning all FAOSTAT data")
-        
-        # Read and combine both datasets
-        dfs = []
-        for file in [combined_current_staging, combined_historic_staging]:
-            if file.exists():
-                logger.info(f"Reading {file.name}")
-                df = pd.read_csv(file)
-                dfs.append(df)
-                del df  # Free memory
-                gc.collect()
-        
-        if not dfs:
-            logger.error("No FAOSTAT data found to process")
-            return
-            
-        # Clean and save final output
-        logger.info("Cleaning combined FAOSTAT data")
+        logger.info("Cleaning FAOSTAT data from raw directories")
         clean_faostat_data(
-            input_files=[str(f) for f in [combined_current_staging, combined_historic_staging] if f.exists()],
+            input_files=[str(f) for f in input_files],
             output_file=str(final_output_path)
         )
-        
         logger.info(f"Saved final cleaned FAOSTAT data to {final_output_path}")
-        success = True
-                
     except Exception as e:
-        logger.error(f"Error combining and cleaning FAOSTAT data: {e}")
-    
-    finally:
-        # Only clean up staging files if processing was successful
-        if success:
-            # Clean up staging files
-            for file in [combined_current_staging, combined_historic_staging]:
-                if file.exists():
-                    file.unlink()
-                    logger.info(f"Cleaned up staging file: {file}")
-        else:
-            logger.info("Keeping staging files for debugging due to processing error")
+        logger.error(f"Error cleaning FAOSTAT data: {e}")
 
-def process_faostat_directory(input_dir: Path, output_path: Path, data_type: str):
-    """
-    Process FAOSTAT data from a specific directory.
-    
-    Args:
-        input_dir: Directory containing FAOSTAT CSV files
-        output_path: Path for combined CSV output
-        data_type: Type of data being processed ('current' or 'historical')
-    """
-    logger.info(f"Processing {data_type} FAOSTAT data from {input_dir}")
-    
-    # Find all CSV files in the directory
-    csv_files = list(input_dir.glob("*.csv"))
-    if not csv_files:
-        logger.warning(f"No CSV files found in {data_type} FAOSTAT directory")
-        return
-        
-    try:
-        logger.info(f"Combining {len(csv_files)} {data_type} FAOSTAT CSV files")
-        
-        # Process files one by one to avoid loading all into memory at once
-        combined_df = None
-        total_raw_rows = 0
-        total_retained_rows = 0
-        
-        # Essential elements to keep - focus only on important food supply metrics
-        essential_elements = [
-            'Food supply (kcal/capita/day)',
-            'Fat supply quantity (g/capita/day)', 
-            'Protein supply quantity (g/capita/day)',
-            'Food supply quantity (kg/capita/yr)'
-        ]
-        
-        # Use smaller chunk size to reduce memory pressure
-        chunk_size = 5000
-        
-        for i, csv_file in enumerate(csv_files):
-            try:
-                logger.info(f"Processing file {i+1}/{len(csv_files)}: {csv_file.name}")
-                
-                # Read in chunks to reduce memory usage
-                chunks = pd.read_csv(csv_file, chunksize=chunk_size)
-                
-                for chunk_num, chunk in enumerate(chunks):
-                    logger.info(f"  Processing chunk {chunk_num+1} of {csv_file.name} with {len(chunk)} rows")
-                    total_raw_rows += len(chunk)
-                    
-                    # Check for historical data format (has columns like Y1961, Y1962, etc.)
-                    year_columns = [col for col in chunk.columns if re.match(r'^Y\d{4}$', col)]
-                    if year_columns:
-                        logger.info(f"  Detected historical data format with {len(year_columns)} year columns")
-                        # Historical data is handled differently and will be processed 
-                        # in clean_faostat_data function
-                        # We still need to filter for Australia though
-                        if 'Area' in chunk.columns:
-                            australia_mask = chunk['Area'] == 'Australia'
-                            chunk = chunk[australia_mask]
-                    else:
-                        # Filter for just Australia data to reduce size immediately (current format)
-                        if 'Area' in chunk.columns:
-                            australia_mask = chunk['Area'] == 'Australia'
-                            chunk = chunk[australia_mask]
-                            
-                            # Also filter for essential elements immediately
-                            if 'Element' in chunk.columns:
-                                element_mask = chunk['Element'].isin(essential_elements)
-                                chunk = chunk[element_mask]
-                    
-                    # Skip processing if no rows left after filtering
-                    if len(chunk) == 0:
-                        logger.info(f"  No Australia data in this chunk, skipping")
-                        continue
-                        
-                    # Count retained rows
-                    total_retained_rows += len(chunk)
-                    
-                    # Rename columns - only for modern format
-                    # Historical format will be handled in clean_faostat_data
-                    if not year_columns:
-                        column_mapping = {
-                            'Area Code': 'area_code',
-                            'Area': 'area',
-                            'Item Code': 'item_code',
-                            'Item': 'item',
-                            'Element Code': 'element_code',
-                            'Element': 'element',
-                            'Year': 'year',
-                            'Value': 'value'  # Value to value mapping
-                        }
-                        
-                        # Apply renaming (only for columns that exist)
-                        for old_col, new_col in column_mapping.items():
-                            if old_col in chunk.columns:
-                                chunk = chunk.rename(columns={old_col: new_col})
-                    
-                    # Add data type column
-                    chunk['data_type'] = data_type
-                    
-                    # Append to file
-                    if combined_df is None:
-                        # For the first chunk, write with headers
-                        chunk.to_csv(output_path, index=False, mode='w')
-                        combined_df = True  # Just a flag to indicate file exists
-                    else:
-                        # For subsequent chunks, append without headers
-                        chunk.to_csv(output_path, index=False, mode='a', header=False)
-                    
-                    # Force garbage collection
-                    del chunk
-                    gc.collect()
-                
-            except Exception as e:
-                logger.error(f"  Error processing {csv_file.name}: {e}")
-                continue
-        
-        logger.info(f"Saved combined {data_type} FAOSTAT data to {output_path}")
-        logger.info(f"Total raw rows: {total_raw_rows}, retained rows: {total_retained_rows}")
-        
-    except Exception as e:
-        logger.error(f"Error processing {data_type} FAOSTAT data: {e}")
-    
-    # Force garbage collection at the end
-    gc.collect()
 
 def process_fire_in_bottle_data():
     """Process Fire in a Bottle linoleic acid data using the scraper."""
     logger.info("=== Processing Fire in a Bottle data ===")
     
-    output_path = PROCESSED_DATA_DIR / "fire_in_a_bottle_la_content.csv"
+    output_path = PROCESSED_DATA_DIR / "la_content_fireinabottle_processed.csv"
     
     try:
         logger.info(f"Scraping Fire in a Bottle data from {URL}")
@@ -408,7 +241,7 @@ def process_semantic_validation():
     
     try:
         # Load LA content data
-        la_content_path = PROCESSED_DATA_DIR / 'fire_in_a_bottle_la_content.csv'
+        la_content_path = PROCESSED_DATA_DIR / 'la_content_fireinabottle_processed.csv'
         if not la_content_path.exists():
             logger.error("LA content data not found. Please process Fire in a Bottle data first.")
             return False
@@ -426,7 +259,7 @@ def process_semantic_validation():
         )
         
         # Save final mapping
-        output_path = PROCESSED_DATA_DIR / 'fao_la_mapping_final.csv'
+        output_path = PROCESSED_DATA_DIR / 'fao_la_mapping_validated.csv'
         validation_df.to_csv(output_path, index=False)
         logger.info(f"Saved final mapping to {output_path}")
         
@@ -478,7 +311,7 @@ def main():
         process_ncd_risc_csvs()
     
     if args.faostat or not any([args.aihw, args.ncd, args.fire]):
-        process_faostat_data()
+        process_faostat_data(force_processing=args.force)
     
     if args.fire or not any([args.aihw, args.ncd, args.faostat]):
         process_fire_in_bottle_data()
@@ -489,6 +322,15 @@ def main():
             logger.error("Semantic validation failed.")
             sys.exit(1)
     
+    logger.info("=== Calculating dietary metrics ===")
+    calculate_dietary_metrics_main()
+
+    logger.info("=== Calculating health outcome metrics ===")
+    health_outcome_metrics_main()
+
+    logger.info("=== Merging health and dietary datasets ===")
+    merge_health_dietary_main()
+
     logger.info("ETL process completed successfully")
 
 if __name__ == "__main__":

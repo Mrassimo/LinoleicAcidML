@@ -11,7 +11,7 @@ plt.style.use('bmh')  # Using a built-in style that works well for time series
 
 # Load data
 data_dir = Path('data')
-metrics_df = pd.read_csv(data_dir / 'processed' / 'australia_dietary_metrics.csv')
+metrics_df = pd.read_csv(data_dir / 'processed' / 'dietary_metrics_australia_calculated.csv')
 
 # Create figure and axis
 fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 10), height_ratios=[2, 1])

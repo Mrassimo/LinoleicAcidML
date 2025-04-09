@@ -12,7 +12,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 # Constants
 URL = "https://fireinabottle.net/foods-highest-and-lowest-in-linoleic-acid-n6-pufa/"
 OUTPUT_DIR = "data/raw"
-OUTPUT_FILE = os.path.join(OUTPUT_DIR, "fire_in_a_bottle_la_content.csv")
+OUTPUT_FILE = os.path.join(OUTPUT_DIR, "la_content_fireinabottle_processed.csv")
 # --- Debugging File ---
 RAW_HTML_DEBUG_FILE = os.path.join(OUTPUT_DIR, "debug_raw_html.html")
 # --- /Debugging File ---

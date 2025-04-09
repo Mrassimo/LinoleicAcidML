@@ -7,22 +7,21 @@ This project investigates the relationship between seed oil intake (focusing on 
 ```
 .
 ├── data/
-│   ├── raw/          # Raw data files
-│   └── processed/    # Processed and cleaned datasets
+│   ├── raw/            # Raw data files
+│   └── processed/      # Processed and cleaned datasets
 ├── src/
-│   ├── download_data.py       # Data download script
-│   ├── process_raw_data.py    # Raw data processing
-│   ├── process_aihw_data.py   # AIHW Excel processing
-│   ├── process_faostat_fbs.py # FAOSTAT processing
-│   ├── scrape_fire_in_bottle.py # Web scraping
-│   ├── initial_data_cleaning.py # Data cleaning
-│   ├── merge_datasets.py      # Dataset merging
-│   └── models/               # Pydantic models
-├── tests/                    # Test suite
-├── planning.md              # Project planning and architecture
-├── tasks.md                # Task tracking
-└── requirements.txt        # Python dependencies
+│   ├── run_etl.py                # Main ETL pipeline entry point (run as module)
+│   ├── download_data.py          # Data download utilities
+│   ├── data_processing/          # Core data processing modules
+│   ├── models/                   # Pydantic models
+│   └── visualization/            # Plotting and visualisation scripts
+├── tests/                       # Pytest suite covering all modules
+├── planning.md                  # Project planning and architecture
+├── tasks.md                     # Task tracking
+└── requirements.txt             # Python dependencies
 ```
+
+The core data cleaning, transformation, and integration logic now resides in `src/data_processing/`. Previous standalone scripts have been modularised or removed.
 
 ## Setup
 
@@ -37,11 +36,18 @@ This project investigates the relationship between seed oil intake (focusing on 
    ```bash
    pip install -r requirements.txt
    ```
-3. Run the ETL pipeline:
+3. Run the ETL pipeline from the project root:
 
    ```bash
-   python src/run_etl.py
+   python -m src.run_etl --no-download --force
    ```
+
+   The above command executes the full ETL pipeline. Optional flags:
+
+   - `--no-download` to skip re-downloading data if already present
+   - `--force` to overwrite existing processed outputs
+
+   You can omit these flags or combine them as needed.
 
 ## Data Sources
 

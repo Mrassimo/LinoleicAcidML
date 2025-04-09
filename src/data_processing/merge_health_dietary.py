@@ -161,7 +161,7 @@ def main():
     processed_dir = data_dir / 'processed'
 
     # Load dietary metrics
-    dietary_metrics_path = processed_dir / 'australia_dietary_metrics.csv'
+    dietary_metrics_path = processed_dir / 'dietary_metrics_australia_calculated.csv'
     if not dietary_metrics_path.exists():
         logger.error(f"Dietary metrics file not found: {dietary_metrics_path}")
         return
@@ -180,9 +180,9 @@ def main():
     
     # Load health outcome metrics from the consolidated file
     logger.info("Loading health outcome metrics...")
-    health_metrics_path = processed_dir / 'health_outcome_metrics.csv'
+    health_metrics_path = processed_dir / 'health_metrics_australia_combined.csv'
     
-    # Check if health_outcome_metrics.csv exists, if not, generate it
+    # Check if health_metrics_australia_combined.csv exists, if not, generate it
     if not health_metrics_path.exists():
         logger.info("Health outcome metrics file not found. Generating now...")
         try:
@@ -269,7 +269,7 @@ def main():
     final_df = final_df.sort_values('Year').reset_index(drop=True)
 
     # Save final dataset
-    output_path = processed_dir / 'analytical_merged_data_with_lags.csv'
+    output_path = processed_dir / 'analytical_data_australia_final.csv'
     try:
         final_df.to_csv(output_path, index=False)
         logger.info(f"Final analytical dataset saved successfully to {output_path}")

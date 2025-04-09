@@ -71,11 +71,12 @@ def main():
     processed_dir.mkdir(exist_ok=True)
     
     # Process LA content data
-    input_path = raw_dir / 'fire_in_a_bottle_la_content.csv'
+    input_path = raw_dir / 'la_content_fireinabottle_processed.csv'
     clean_df = clean_la_content_data(input_path)
     
     # Save processed data
-    output_path = processed_dir / 'linoleic_acid_content.csv'
+    # The intermediate cleaned LA content CSV is deprecated; skip saving
+    output_path = None
     clean_df.to_csv(output_path, index=False)
     logger.info(f"Processed LA content data saved to {output_path}")
     

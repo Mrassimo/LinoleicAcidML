@@ -7,7 +7,7 @@ from unittest.mock import patch
 import tempfile
 import shutil
 
-from src.merge_datasets import (
+from src.data_processing.merge_datasets import (
     fuzzy_match_foods,
     merge_faostat_fire,
     merge_health_data,
