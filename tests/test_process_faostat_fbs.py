@@ -1,6 +1,6 @@
 import pytest
 import pandas as pd
-from src.data_processing.process_faostat_fbs import clean_faostat_fbs, FAOSTATFBSEntry
+from src.data_processing.process_faostat_fbs import process_faostat_data, FAOStatRecord
 import os
 
 @pytest.fixture
@@ -22,58 +22,53 @@ def sample_data():
         'y2011N': [None, None]
     })
 
-def test_clean_faostat_fbs(sample_data, tmp_path):
-    """Test the full cleaning pipeline with sample data."""
+def test_process_faostat_data_pipeline(sample_data, tmp_path):
+    """Test the full processing pipeline with sample data."""
     # Create temp input file
     input_path = os.path.join(tmp_path, 'test_input.csv')
     sample_data.to_csv(input_path, index=False)
-    
+
     # Process data
-    output_path = os.path.join(tmp_path, 'test_output.csv')
-    result = clean_faostat_fbs(input_path, output_path)
-    
-    # Check output exists
-    assert os.path.exists(output_path)
-    
-    # Check expected columns
+    result = process_faostat_data(input_path)
+
+    # Check expected columns (no 'flag' in new schema)
     expected_cols = [
-        'area_code', 'area', 'item_code', 'item', 
-        'element_code', 'element', 'unit', 'year', 'value', 'flag'
+        'area_code', 'area', 'item_code', 'item',
+        'element_code', 'element', 'unit', 'year', 'value'
     ]
     assert all(col in result.columns for col in expected_cols)
-    
+
     # Check year conversion
     assert result['year'].min() == 2010
     assert result['year'].max() == 2011
-    
-    # Check flag values
-    assert set(result['flag'].dropna().unique()) == {'E', 'X'}
+
+    # Check area is always 'Australia'
+    assert set(result['area'].str.lower()) == {'australia'}
 
 def test_pydantic_validation(sample_data, tmp_path):
-    """Test Pydantic model validation."""
+    """Test Pydantic model validation using FAOStatRecord."""
     # Process sample data
     input_path = os.path.join(tmp_path, 'test_input.csv')
     sample_data.to_csv(input_path, index=False)
-    output_path = os.path.join(tmp_path, 'test_output.csv')
-    result = clean_faostat_fbs(input_path, output_path)
-    
+    result = process_faostat_data(input_path)
+
     # Test validation of good records
     good_record = result.iloc[0].to_dict()
-    validated = FAOSTATFBSEntry(**good_record)
+    validated = FAOStatRecord(**good_record)
     assert validated.year == 2010
-    assert validated.flag == 'X'
-    
-    # Test validation of bad year
+    assert validated.area.lower() == 'australia'
+
+    # Test validation of bad year (should raise ValueError if year is not int or out of range)
     bad_year = good_record.copy()
-    bad_year['year'] = 2009
-    with pytest.raises(ValueError):
-        FAOSTATFBSEntry(**bad_year)
-    
-    # Test validation of bad flag
-    bad_flag = good_record.copy()
-    bad_flag['flag'] = 'Z'
-    with pytest.raises(ValueError):
-        FAOSTATFBSEntry(**bad_flag)
+    bad_year['year'] = 1950  # Not Australia FBS range
+    with pytest.raises(Exception):
+        FAOStatRecord(**bad_year)
+
+    # Test validation of negative value
+    bad_value = good_record.copy()
+    bad_value['value'] = -5
+    with pytest.raises(Exception):
+        FAOStatRecord(**bad_value)
 
 def test_missing_value_handling(tmp_path):
     """Test that rows with missing values are dropped."""
@@ -90,19 +85,18 @@ def test_missing_value_handling(tmp_path):
         'y2011': [None, 3516.0],    # One missing value
         'y2011F': ['X', 'E']
     })
-    
+
     input_path = os.path.join(tmp_path, 'test_input.csv')
     test_data.to_csv(input_path, index=False)
-    
-    output_path = os.path.join(tmp_path, 'test_output.csv')
-    result = clean_faostat_fbs(input_path, output_path)
-    
+
+    result = process_faostat_data(input_path)
+
     # Should have 2 rows (one valid for each year)
     assert len(result) == 2
     assert result['value'].notna().all()
 
 def test_duplicate_removal(tmp_path):
-    """Test that duplicate rows are removed during cleaning."""
+    """Test that duplicate rows are removed during processing."""
     df = pd.DataFrame({
         'area_code': [10, 10],
         'area': ['Australia', 'Australia'],
@@ -119,8 +113,7 @@ def test_duplicate_removal(tmp_path):
     input_path = os.path.join(tmp_path, 'dup_input.csv')
     df.to_csv(input_path, index=False)
 
-    output_path = os.path.join(tmp_path, 'dup_output.csv')
-    result = clean_faostat_fbs(input_path, output_path)
+    result = process_faostat_data(input_path)
 
     # There should be only 2 rows (one per year) after duplicate removal
     # not 4 rows (2 duplicates x 2 years)

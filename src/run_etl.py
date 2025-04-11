@@ -40,13 +40,14 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Import project modules
-from .data_processing.process_faostat_fbs import clean_faostat_data
-from .data_processing.scrape_fire_in_bottle import scrape_la_content, save_to_csv, URL
-from .data_processing.process_aihw_data import process_aihw_excel
-from .data_processing.validation_utils import get_la_content_for_item
-from .data_processing.update_validation import create_validation_data
-from .data_processing.calculate_dietary_metrics import calculate_dietary_metrics as calculate_dietary_metrics_main
-from .data_processing.health_outcome_metrics import main as health_outcome_metrics_main
+from src.data_processing.process_faostat_fbs import clean_faostat_data
+from src.data_processing.scrape_fire_in_bottle import scrape_la_content, save_to_csv
+from src.config import FIRE_IN_A_BOTTLE_URL
+from src.data_processing.process_aihw_data import process_aihw_excel
+from src.data_processing.validation_utils import get_la_content_for_item
+from src.data_processing.update_validation import create_validation_data
+from src.data_processing.calculate_dietary_metrics import calculate_dietary_metrics as calculate_dietary_metrics_main
+from src.data_processing.health_outcome_metrics import main as health_outcome_metrics_main
 from .data_processing.merge_health_dietary import main as merge_health_dietary_main
 try:
     from . import download_data
@@ -216,8 +217,8 @@ def process_fire_in_bottle_data():
     output_path = PROCESSED_DATA_DIR / "la_content_fireinabottle_processed.csv"
     
     try:
-        logger.info(f"Scraping Fire in a Bottle data from {URL}")
-        df = scrape_la_content(URL)
+        logger.info(f"Scraping Fire in a Bottle data from {FIRE_IN_A_BOTTLE_URL}")
+        df = scrape_la_content(FIRE_IN_A_BOTTLE_URL)
         
         if df is not None and not df.empty:
             logger.info(f"Successfully scraped Fire in a Bottle data")

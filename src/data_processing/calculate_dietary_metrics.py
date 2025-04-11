@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 import logging
+from src import config
 
 # Set up logging
 logging.basicConfig(
@@ -11,10 +12,10 @@ logging.basicConfig(
 def load_data():
     """Load and prepare the required datasets."""
     # Load FAOSTAT data
-    fao_df = pd.read_csv('data/processed/faostat_fbs_australia_processed.csv')
+    fao_df = pd.read_csv(config.FAOSTAT_PROCESSED_FILE)
     
     # Load LA content mapping
-    la_mapping = pd.read_csv('data/processed/fao_la_mapping_validated.csv')
+    la_mapping = pd.read_csv(config.FAOSTAT_LA_MAPPING_FILE)
     
     # Log data shapes
     logging.info(f"Loaded FAOSTAT data: {fao_df.shape} rows")
@@ -473,11 +474,11 @@ def calculate_dietary_metrics():
     dietary_metrics, adjustment_factors = handle_methodology_change(dietary_metrics)
     
     # Save the results
-    dietary_metrics.to_csv('data/processed/dietary_metrics_australia_calculated.csv', index=False)
-    logging.info("Dietary metrics have been calculated and saved to 'data/processed/dietary_metrics_australia_calculated.csv'")
+    dietary_metrics.to_csv(config.DIETARY_METRICS_FILE, index=False)
+    logging.info(f"Dietary metrics have been calculated and saved to '{config.DIETARY_METRICS_FILE}'")
     
     # Save a metadata file with assumptions and limitations
-    with open('data/processed/dietary_metrics_metadata.md', 'w') as f:
+    with open(config.DIETARY_METRICS_METADATA_FILE, 'w') as f:
         f.write("# Dietary Metrics Calculation Metadata\n\n")
         f.write("## Data Processing Assumptions and Limitations\n\n")
         f.write("### FAOSTAT Data Processing\n\n")

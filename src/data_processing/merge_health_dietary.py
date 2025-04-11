@@ -6,6 +6,7 @@ Creates the final analytical dataset with lagged predictors.
 import pandas as pd
 import numpy as np
 from pathlib import Path
+from src import config
 from pydantic import BaseModel, Field, field_validator
 import logging
 from typing import List, Dict, Optional
@@ -157,11 +158,11 @@ def standardize_dietary_metrics(dietary_df: pd.DataFrame) -> pd.DataFrame:
 
 def main():
     # Set up paths
-    data_dir = Path('data')
-    processed_dir = data_dir / 'processed'
+    # Use centralised processed data directory from config
+    processed_dir = config.PROCESSED_DATA_DIR
 
     # Load dietary metrics
-    dietary_metrics_path = processed_dir / 'dietary_metrics_australia_calculated.csv'
+    dietary_metrics_path = config.DIETARY_METRICS_FILE
     if not dietary_metrics_path.exists():
         logger.error(f"Dietary metrics file not found: {dietary_metrics_path}")
         return
@@ -180,7 +181,7 @@ def main():
     
     # Load health outcome metrics from the consolidated file
     logger.info("Loading health outcome metrics...")
-    health_metrics_path = processed_dir / 'health_metrics_australia_combined.csv'
+    health_metrics_path = config.HEALTH_METRICS_FILE
     
     # Check if health_metrics_australia_combined.csv exists, if not, generate it
     if not health_metrics_path.exists():
@@ -254,7 +255,7 @@ def main():
     # Save detailed validation errors if any
     if validation_errors:
         error_df = pd.DataFrame(list(validation_errors.items()), columns=['Year_or_Row', 'Error'])
-        error_path = processed_dir / 'analytical_data_validation_errors.csv'
+        error_path = config.ANALYTICAL_DATA_VALIDATION_ERRORS_FILE
         error_df.to_csv(error_path, index=False)
         logger.warning(f"Detailed validation errors saved to {error_path}")
 
@@ -269,7 +270,7 @@ def main():
     final_df = final_df.sort_values('Year').reset_index(drop=True)
 
     # Save final dataset
-    output_path = processed_dir / 'analytical_data_australia_final.csv'
+    output_path = config.ANALYTICAL_DATA_FINAL_FILE
     try:
         final_df.to_csv(output_path, index=False)
         logger.info(f"Final analytical dataset saved successfully to {output_path}")

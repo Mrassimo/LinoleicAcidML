@@ -4,19 +4,17 @@ import zipfile
 import logging
 import time
 from pathlib import Path
+from src import config
 from typing import Dict, List, Optional
 import pandas as pd
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-# Define the target directory for raw data
-RAW_DATA_DIR = Path("data/raw")
-RAW_DATA_DIR.mkdir(parents=True, exist_ok=True)
-
-# Define the extraction directories for FAOSTAT data
-FAOSTAT_EXTRACT_DIR = RAW_DATA_DIR / "faostat_oceania"
-FAOSTAT_HISTORIC_EXTRACT_DIR = RAW_DATA_DIR / "faostat_historic_oceania"
+# Use centralised configuration for data directories
+config.RAW_DATA_DIR.mkdir(parents=True, exist_ok=True)
+FAOSTAT_EXTRACT_DIR = config.RAW_DATA_DIR / "faostat_oceania"
+FAOSTAT_HISTORIC_EXTRACT_DIR = config.RAW_DATA_DIR / "faostat_historic_oceania"
 FAOSTAT_EXTRACT_DIR.mkdir(parents=True, exist_ok=True)
 FAOSTAT_HISTORIC_EXTRACT_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -26,25 +24,26 @@ DEFAULT_HEADERS = {
 }
 
 # List of files to download with their specific requirements
+# List of files to download with their specific requirements (centralised in config)
 FILES_TO_DOWNLOAD = [
     {
-        "url": "https://ncdrisc.org/downloads/dm-2024/individual-countries/NCD_RisC_Lancet_2024_Diabetes_Australia.csv",
-        "filename": "NCD_RisC_Lancet_2024_Diabetes_Australia.csv",
+        "url": config.NCD_DIABETES_URL,
+        "filename": config.NCD_DIABETES_FILENAME,
         "type": "csv"
     },
     {
-        "url": "https://ncdrisc.org/downloads/chol/individual-countries/Australia.csv",
-        "filename": "NCD_RisC_Cholesterol_Australia.csv",
+        "url": config.NCD_CHOLESTEROL_URL,
+        "filename": config.NCD_CHOLESTEROL_FILENAME,
         "type": "csv"
     },
     {
-        "url": "https://ncdrisc.org/downloads/bmi-2024/adult/by_country/NCD_RisC_Lancet_2024_BMI_age_standardised_Australia.csv",
-        "filename": "NCD_RisC_Lancet_2024_BMI_age_standardised_Australia.csv",
+        "url": config.NCD_BMI_URL,
+        "filename": config.NCD_BMI_FILENAME,
         "type": "csv"
     },
     {
-        "url": "https://www.aihw.gov.au/getmedia/25edf694-fd9b-4f74-bf16-22bbc969a194/AIHW-DEM-02-S2-Prevalence.xlsx",
-        "filename": "AIHW-DEM-02-S2-Prevalence.xlsx",
+        "url": config.AIHW_PREVALENCE_URL,
+        "filename": config.AIHW_PREVALENCE_FILENAME,
         "type": "excel",
         "headers": {
             'Accept': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -52,8 +51,8 @@ FILES_TO_DOWNLOAD = [
         }
     },
     {
-        "url": "https://www.aihw.gov.au/getmedia/e1e90ec9-fc7b-4a7a-a74d-91d7bb4e3ba3/AIHW-DEM-02-S3-Mortality-202409.xlsx",
-        "filename": "AIHW-DEM-02-S3-Mortality-202409.xlsx",
+        "url": config.AIHW_MORTALITY_URL,
+        "filename": config.AIHW_MORTALITY_FILENAME,
         "type": "excel",
         "headers": {
             'Accept': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -61,8 +60,8 @@ FILES_TO_DOWNLOAD = [
         }
     },
     {
-        "url": "https://www.aihw.gov.au/getmedia/76862f38-806d-489e-b85b-7974435bc3d7/AIHW-CVD-92-HSVD-facts-data-tables-12122024.xlsx",
-        "filename": "AIHW-CVD-92-HSVD-facts-data-tables-12122024.xlsx",
+        "url": config.AIHW_CVD_URL,
+        "filename": config.AIHW_CVD_FILENAME,
         "type": "excel",
         "headers": {
             'Accept': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -70,20 +69,19 @@ FILES_TO_DOWNLOAD = [
         }
     },
     {
-        "url": "https://bulks-faostat.fao.org/production/FoodBalanceSheets_E_Oceania.zip",
-        "filename": "FoodBalanceSheets_E_Oceania.zip",
+        "url": config.FAOSTAT_FBS_URL,
+        "filename": config.FAOSTAT_FBS_FILENAME,
         "type": "zip",
         "extract": True
     },
     {
-        "url": "https://bulks-faostat.fao.org/production/FoodBalanceSheetsHistoric_E_Oceania.zip",
-        "filename": "FoodBalanceSheetsHistoric_E_Oceania.zip",
+        "url": config.FAOSTAT_HISTORIC_URL,
+        "filename": config.FAOSTAT_HISTORIC_FILENAME,
         "type": "zip",
         "extract": True,
-        "specific_files": ["FoodBalanceSheetsHistoric_E_Oceania.csv"]
+        "specific_files": config.FAOSTAT_HISTORIC_SPECIFIC_FILES
     }
 ]
-
 def validate_file(file_path: Path, file_type: str) -> bool:
     """Validates downloaded files based on their type."""
     try:
@@ -175,7 +173,7 @@ def main():
         url = file_info["url"]
         filename = file_info["filename"]
         file_type = file_info["type"]
-        destination_path = RAW_DATA_DIR / filename
+        destination_path = config.RAW_DATA_DIR / filename
         headers = file_info.get("headers")
 
         if download_file(url, destination_path, headers=headers):

@@ -5,6 +5,7 @@ Merges NCD-RisC and specific AIHW metrics into a single yearly dataset.
 
 import pandas as pd
 from pathlib import Path
+from src import config
 import logging
 from typing import Dict, List, Optional
 
@@ -12,8 +13,7 @@ from typing import Dict, List, Optional
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-# Define base paths
-PROCESSED_DATA_DIR = Path("data/processed")
+# Use centralised processed data directory from config
 
 def load_and_validate_csv(file_path: Path, required_cols: Optional[List[str]] = None) -> Optional[pd.DataFrame]:
     """Loads a CSV file and performs basic validation."""
@@ -39,9 +39,9 @@ def load_and_validate_csv(file_path: Path, required_cols: Optional[List[str]] = 
 def extract_ncd_risc_metrics() -> Optional[pd.DataFrame]:
     """Extracts and standardizes metrics from NCD-RisC files."""
     logger.info("Processing NCD-RisC data...")
-    diabetes_df = load_and_validate_csv(PROCESSED_DATA_DIR / 'ncdrisc_diabetes_australia_processed.csv', ['year', 'sex', 'age-standardised_prevalence_of_diabetes_18+_years_', 'age-standardised_proportion_of_people_with_diabetes_who_were_treated_30+_years_'])
-    bmi_df = load_and_validate_csv(PROCESSED_DATA_DIR / 'ncdrisc_bmi_australia_processed.csv', ['year', 'sex', 'prevalence_of_bmi>=30_kg_m²_obesity_'])
-    cholesterol_df = load_and_validate_csv(PROCESSED_DATA_DIR / 'ncdrisc_cholesterol_australia_processed.csv', ['year', 'sex', 'mean_total_cholesterol_mmol_l_', 'mean_non-hdl_cholesterol_mmol_l_'])
+    diabetes_df = load_and_validate_csv(config.PROCESSED_DATA_DIR / 'ncdrisc_diabetes_australia_processed.csv', ['year', 'sex', 'age-standardised_prevalence_of_diabetes_18+_years_', 'age-standardised_proportion_of_people_with_diabetes_who_were_treated_30+_years_'])
+    bmi_df = load_and_validate_csv(config.PROCESSED_DATA_DIR / 'ncdrisc_bmi_australia_processed.csv', ['year', 'sex', 'prevalence_of_bmi>=30_kg_m²_obesity_'])
+    cholesterol_df = load_and_validate_csv(config.PROCESSED_DATA_DIR / 'ncdrisc_cholesterol_australia_processed.csv', ['year', 'sex', 'mean_total_cholesterol_mmol_l_', 'mean_non-hdl_cholesterol_mmol_l_'])
 
     metrics_list = []
 
@@ -155,7 +155,7 @@ def extract_aihw_metrics() -> Optional[pd.DataFrame]:
     all_aihw_metrics = []
 
     # Dementia Prevalence (Number) - From S2.4
-    prev_df = load_and_validate_csv(PROCESSED_DATA_DIR / 'aihw_dementia_prevalence_australia_processed.csv', ['year', 'value', 'source_sheet', 'sex'])
+    prev_df = load_and_validate_csv(config.AIHW_PREVALENCE_PROCESSED_FILE, ['year', 'value', 'source_sheet', 'sex'])
     if prev_df is not None:
         # Log unique sex values before filtering Dementia Prevalence
         logger.debug(f"Dementia Prevalence - unique 'sex' values before filtering: {prev_df['sex'].unique().tolist()}")
@@ -176,7 +176,7 @@ def extract_aihw_metrics() -> Optional[pd.DataFrame]:
             logger.warning("No 'persons' data found in aihw_dementia_prevalence_australia_processed.csv from sheet S2.4.")
 
     # Dementia Mortality (Age-Standardised Rate) - From S3.5
-    mort_df = load_and_validate_csv(PROCESSED_DATA_DIR / 'aihw_dementia_mortality_australia_processed.csv', ['year', 'value', 'source_sheet', 'metric_type', 'sex'])
+    mort_df = load_and_validate_csv(config.AIHW_MORTALITY_PROCESSED_FILE, ['year', 'value', 'source_sheet', 'metric_type', 'sex'])
     if mort_df is not None:
         # Log unique sex values before filtering Dementia Mortality
         logger.debug(f"Dementia Mortality - unique 'sex' values before filtering: {mort_df['sex'].unique().tolist()}")
@@ -198,7 +198,7 @@ def extract_aihw_metrics() -> Optional[pd.DataFrame]:
 
 
     # CVD Mortality (Age-Standardised Rate) - From Table 11 in aihw_cvd_all_facts.csv
-    cvd_df = load_and_validate_csv(PROCESSED_DATA_DIR / 'aihw_cvd_metrics_australia_processed.csv', ['year', 'value', 'source_sheet', 'metric_type', 'sex'])
+    cvd_df = load_and_validate_csv(config.AIHW_CVD_PROCESSED_FILE, ['year', 'value', 'source_sheet', 'metric_type', 'sex'])
     if cvd_df is not None:
         # Log unique sex values before filtering CVD Mortality
         logger.debug(f"CVD Mortality - unique 'sex' values before filtering: {cvd_df['sex'].unique().tolist()}")
@@ -255,7 +255,7 @@ def main():
     merged_health_df = merged_health_df.sort_values('Year').reset_index(drop=True)
 
     # Save the merged health metrics
-    output_path = PROCESSED_DATA_DIR / 'health_metrics_australia_combined.csv'
+    output_path = config.HEALTH_METRICS_FILE
     try:
         merged_health_df.to_csv(output_path, index=False)
         logger.info(f"Merged health metrics saved successfully to {output_path}")

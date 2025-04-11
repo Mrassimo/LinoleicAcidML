@@ -1,10 +1,20 @@
 """
-Perform semantic matching between FAOSTAT food items and LA content items using sentence embeddings.
+Manual helper script for FAO/LA mapping (not part of ETL pipeline).
+
+This script generates candidate matches between FAOSTAT food items and linoleic acid (LA) content items
+using sentence embeddings and semantic similarity. It is intended as a tool to assist manual curation
+of the validated mapping used in the main ETL pipeline (see update_validation.py).
+
+The output (fao_la_mapping_semantic_matches.csv) is for reference only and is NOT used directly in the
+automated pipeline. All final mappings are maintained manually in update_validation.py.
+
+For Australian English usage and maintainability, please update this docstring if the workflow changes.
 """
 
 import pandas as pd
 import numpy as np
 from pathlib import Path
+from src import config
 from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
 from pydantic import BaseModel, Field
@@ -78,16 +88,11 @@ def load_data() -> Tuple[pd.DataFrame, pd.DataFrame]:
     Load the processed FAOSTAT and LA content data
     """
     try:
-        data_dir = Path('data')
-        processed_dir = data_dir / 'processed'
-        
         # Load FAOSTAT data
-        fao_path = processed_dir / 'faostat_fbs_australia_processed.csv'
-        fao_df = pd.read_csv(fao_path)
+        fao_df = pd.read_csv(config.FAOSTAT_PROCESSED_FILE)
         
         # Load LA content data
-        la_path = processed_dir / 'la_content_fireinabottle_processed.csv'
-        la_df = pd.read_csv(la_path)
+        la_df = pd.read_csv(config.LA_CONTENT_FIREINABOTTLE_PROCESSED_FILE)
         
         return fao_df, la_df
     except Exception as e:
@@ -126,7 +131,7 @@ def main():
     
     # Load model
     logger.info("Loading sentence transformer model...")
-    model = SentenceTransformer('all-MiniLM-L6-v2')
+    model = SentenceTransformer(config.SENTENCE_TRANSFORMER_MODEL)
     
     # Generate embeddings
     logger.info("Generating embeddings for FAOSTAT items...")
@@ -144,7 +149,7 @@ def main():
     
     # Create and save mapping table
     mapping_df = pd.DataFrame(matches)
-    output_path = Path('data') / 'processed' / 'fao_la_mapping_semantic_matches.csv'
+    output_path = config.FAO_LA_MAPPING_SEMANTIC_MATCHES_FILE
     mapping_df.to_csv(output_path, index=False)
     logger.info(f"Saved mapping table to {output_path}")
     

@@ -1,3 +1,11 @@
+# ---------------------------------------------------------------------------------
+# WARNING: This script relies on the current structure of the source website,
+# specifically the presence of data within <pre> tags formatted as pipe-delimited tables.
+# If the website changes its structure (e.g., removes or alters <pre> tags, or changes
+# the table format), this script will likely break or fail to extract data correctly.
+# This fragility is a known limitation. See README.md for further details.
+# ---------------------------------------------------------------------------------
+
 import pandas as pd
 import requests
 from bs4 import BeautifulSoup
@@ -5,18 +13,15 @@ import logging
 import os
 import re # Import regex for cleaning
 from io import StringIO # Needed for parsing text blocks that look like tables
+from src import config
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # Constants
-URL = "https://fireinabottle.net/foods-highest-and-lowest-in-linoleic-acid-n6-pufa/"
-OUTPUT_DIR = "data/raw"
-OUTPUT_FILE = os.path.join(OUTPUT_DIR, "la_content_fireinabottle_processed.csv")
-# --- Debugging File ---
-RAW_HTML_DEBUG_FILE = os.path.join(OUTPUT_DIR, "debug_raw_html.html")
-# --- /Debugging File ---
-
+# Constants centralised in config.py
+# Use config.FIRE_IN_A_BOTTLE_URL, config.RAW_DATA_DIR, config.FIRE_IN_A_BOTTLE_OUTPUT_FILE
+RAW_HTML_DEBUG_FILE = str(config.RAW_DATA_DIR / "debug_raw_html.html")
 # Define the columns we absolutely expect in the final output CSV.
 # These names will be used as the header row.
 EXPECTED_COLUMNS = [
@@ -29,7 +34,10 @@ EXPECTED_COLUMNS = [
 def find_and_parse_pre_blocks(soup: BeautifulSoup) -> pd.DataFrame | None:
     """
     Finds <pre> blocks potentially containing the data and parses them.
-    It specifically looks for blocks formatted with '|' delimiters.
+
+    WARNING: This function is highly dependent on the current structure of the source website.
+    It specifically looks for <pre> tags containing pipe-delimited tables. If the website
+    changes its structure or removes these <pre> tags, this function will fail.
 
     Args:
         soup: A BeautifulSoup object representing the parsed HTML.
@@ -41,8 +49,13 @@ def find_and_parse_pre_blocks(soup: BeautifulSoup) -> pd.DataFrame | None:
     logging.info(f"Found {len(pre_tags)} <pre> tag(s).")
 
     if not pre_tags:
-        logging.error("No <pre> tags found on the page. Structure might have changed.")
+        logging.error("No <pre> tags found on the page. The website structure may have changed. "
+                      "This script is fragile to such changes.")
         return None
+
+    if len(pre_tags) > 1:
+        logging.warning(f"More than one <pre> tag found ({len(pre_tags)}). "
+                        "If the data is not in the first tag, this may indicate a site structure change.")
 
     all_data = []
     found_data = False
@@ -171,6 +184,10 @@ def scrape_la_content(url: str) -> pd.DataFrame | None:
     """
     Scrapes the linoleic acid content data from the given URL by parsing <pre> tags.
 
+    WARNING: This scraping approach is fragile and depends on the source website
+    continuing to provide data in <pre> tags with a specific pipe-delimited format.
+    If the website changes, this function will likely break and require maintenance.
+
     Args:
         url: The URL of the webpage to scrape.
 
@@ -188,7 +205,7 @@ def scrape_la_content(url: str) -> pd.DataFrame | None:
 
         # --- Debugging Step: Save Raw HTML ---
         try:
-            os.makedirs(OUTPUT_DIR, exist_ok=True) # Ensure dir exists
+            os.makedirs(config.RAW_DATA_DIR, exist_ok=True) # Ensure dir exists
             with open(RAW_HTML_DEBUG_FILE, 'w', encoding=response.encoding or 'utf-8') as f: # Use detected encoding
                 f.write(response.text)
             logging.info(f"Saved raw HTML response for debugging to {RAW_HTML_DEBUG_FILE}")
@@ -250,8 +267,8 @@ def save_to_csv(df: pd.DataFrame, path: str):
 if __name__ == "__main__":
     logging.info("Starting scraping process...")
     # Ensure OUTPUT_DIR exists before scraping attempt
-    os.makedirs(OUTPUT_DIR, exist_ok=True)
-    scraped_data = scrape_la_content(URL)
+    os.makedirs(config.RAW_DATA_DIR, exist_ok=True)
+    scraped_data = scrape_la_content(config.FIRE_IN_A_BOTTLE_URL)
 
     if scraped_data is not None and not scraped_data.empty:
         # Ensure final DataFrame has exactly the EXPECTED_COLUMNS in the correct order
@@ -267,7 +284,7 @@ if __name__ == "__main__":
 
         logging.info(f"Final DataFrame shape before saving: {final_df.shape}")
         logging.info(f"Final DataFrame columns for CSV: {final_df.columns.tolist()}")
-        save_to_csv(final_df, OUTPUT_FILE)
+        save_to_csv(final_df, str(config.FIRE_IN_A_BOTTLE_OUTPUT_FILE))
 
     elif scraped_data is not None and scraped_data.empty:
          logging.warning("Scraping process finished, but the resulting DataFrame is empty (no data rows found or parsed).")
