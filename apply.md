@@ -1,71 +1,91 @@
-Okay, I've reviewed the project files. This looks like a solid ETL pipeline that has clearly undergone significant development and recent refactoring based on your apply.md notes. You've put considerable effort into handling various data sources, formats, and potential issues.
+Okay, I've reviewed the latest version of your project, including the new visualisation module and the updated tests. You've made excellent progress!
 
-Here's a breakdown of the review, focusing on readiness for the next analytics phase:
+Review Summary:
 
-Overall Impression:
+Code Structure & Refinements:
 
-The project is well-structured with a clear separation of concerns (downloading, processing, merging, validation). The use of modular functions, logging, and Pydantic models demonstrates good data engineering practices. The recent fixes documented in apply.md (addressing AIHW sex assignment, FAOSTAT duplicates, Carb calculation, etc.) show proactive debugging and improvement. The pipeline seems capable of generating the analytical_data_australia_final.csv, which is the intended input for your analytics phase.
+Configuration: The integration of src/config.py across the modules (download_data.py, health_outcome_metrics.py, merge_health_dietary.py, calculate_dietary_metrics.py, semantic_matching.py, scrape_fire_in_bottle.py) is well done and significantly improves maintainability.
 
-Strengths:
+Deprecated Code: You've successfully removed the deprecated processing scripts and their tests, streamlining the codebase.
 
-Modularity: Code is well-organized into modules within src/, particularly the data_processing directory.
+Visualisation Module: The new src/visualisation module is well-structured with separate files for different plot types (eda, time_series, correlation, scatter, regression), a utils.py for common functions, and a main.py entry point. This is a great setup for generating your analytical visuals. The use of Pydantic models for configuration (TimeSeriesConfig, etc.) is consistent and good practice.
 
-ETL Orchestration: src/run_etl.py acts as a clear entry point, managing the workflow and allowing selective processing via arguments.
+Test Updates: Significant effort has gone into updating the tests.
 
-Data Download: src/download_data.py handles fetching data robustly with retries and basic validation.
+Pydantic v2 compatibility issues (like using @field_validator) seem resolved.
 
-Complex Data Handling: src/data_processing/process_aihw_data.py tackles the complex structure of AIHW Excel files, including specific handling for problematic sheets identified during debugging.
+Tests for scraping (test_scrape_fire_in_a_bottle.py) now better reflect the <pre> tag parsing logic and fallbacks.
 
-Validation: Good use of Pydantic models (AIHWRecord, FAOStatRecord, AnalyticalRecord) for data validation at different stages, especially for the final analytical dataset.
+Tests for FAOSTAT processing (test_process_faostat_fbs.py, test_faostat_validation.py) correctly use the FAOStatRecord model and check the pipeline output.
 
-Logging: Consistent use of logging provides good visibility into the ETL process.
+Semantic matching tests (test_semantic_matching.py) are updated.
 
-Documentation: README.md, planning.md, and tasks.md provide valuable context, planning details, and tracking of recent work.
+Health metrics (test_health_outcome_metrics.py) and merging tests (test_merge_health_dietary.py) look appropriate for the current logic.
 
-Derived Metrics: calculate_dietary_metrics.py correctly calculates key metrics like LA intake (% calories, g/day ) and handles methodology changes. The fix for Total_Carb_Supply_g is noted and important.
+AIHW Test Issues: You've correctly identified the remaining failures in test_process_aihw_excel and test_process_sheet_table11.
 
-Lagged Features: merge_health_dietary.py correctly creates lagged predictors, which are often crucial for time-series analysis relating diet to health outcomes.
+test_process_aihw_excel: The failure likely stems from the fact that the standard processing logic in process_aihw_data.py might not extract records from every sheet if it doesn't find specific headers or patterns, especially after the special handling logic for S2.4, S3.5, and Table 11 returns early. If no records are extracted from any sheet in the test file (which only contains 'Prevalence' and 'Mortality' sheets without the specific structures targeted by special handling), the output CSV won't be created. This might be acceptable behaviour, but the test needs adjustment to either use a test Excel file that does yield records via standard processing or to assert that no file is created under those specific test conditions.
 
-Completeness Reporting: Logging data completeness at the end of health_outcome_metrics.py and merge_health_dietary.py is excellent for understanding the final dataset's limitations.
+test_process_sheet_table11: The 'persons' vs 'all' mismatch is a classic standardisation issue. Your process_sheet function explicitly assigns 'persons' for Table 11, while your test likely expects 'all' based on the dummy data setup. You should standardise this – decide whether 'persons' or 'all' is your project standard for aggregated sex data and ensure both the processing code and the test use the same term. 'persons' is often preferred in health data contexts.
 
-Areas for Improvement/Consideration (Primarily for Robustness & Maintainability):
+Final CSV (analytical_data_australia_final.csv):
 
-Testing Suite Update: This is the most significant area needing attention before heavy reliance on the output for analytics.
+The structure you provided matches the AnalyticalRecord model well.
 
-Refactoring Alignment: Several test files (test_process_faostat_fbs.py, test_faostat_validation.py, test_scrape_fire_in_a_bottle.py, test_calculate_dietary_metrics.py) seem out of sync with the refactored code, referencing old function/model names or logic (e.g., Markdown parsing vs. <pre> tag parsing for Fire-in-a-Bottle). These need updating to accurately test the current implementation.
+It includes the core dietary metrics, the NCD-RisC/AIHW health outcomes you've processed, and the crucial lagged LA variables.
 
-Deprecated Code Tests: Tests for potentially deprecated modules (test_process_la_content.py, test_merge_datasets.py) should be removed if the modules are indeed deprecated.
-
-Coverage: Consider adding more tests, especially for the complex conditional logic in process_aihw_data.py (special sheet handling) and calculate_dietary_metrics.py (imputation, adjustments). Test edge cases.
-
-Deprecated Code Clarification: Confirm if src/data_processing/process_la_content.py and src/data_processing/merge_datasets.py are truly deprecated. Their functionality seems covered by scrape_fire_in_bottle.py, update_validation.py, calculate_dietary_metrics.py, and merge_health_dietary.py. If so, remove them and their corresponding tests to simplify the codebase.
-
-Semantic Matching Workflow: The purpose of semantic_matching.py needs clarification. update_validation.py uses hardcoded lists to create the final fao_la_mapping_validated.csv. Is the semantic matching output used to inform these hardcoded lists (aiding manual validation), or is it currently unused in the main pipeline? If unused, it might be considered exploratory code. If intended for use, the pipeline needs adjustment. The current reliance on hardcoded lists in update_validation.py is functional but less maintainable if sources change significantly.
-
-Web Scraping Fragility: scrape_fire_in_bottle.py relies on finding data within <pre> tags. This can break easily if the website structure changes. While functional, acknowledge this as a potential maintenance point. Adding more specific selectors or error checking could help, but scraping is inherently brittle. Saving the raw HTML for debugging was a good addition.
-
-Manual Data Steps: planning.md mentions manual downloads for ABS and IHME data. How are these integrated into the project structure? Ensure there are clear instructions or placeholders in the data/raw directory and potentially update README.md or planning.md on how to acquire and place these files for the next phase (if they are needed for deeper health outcome analysis beyond the current NCD-RisC/AIHW processing).
-
-Configuration: Consider moving hardcoded URLs, file paths, model names (like the sentence transformer), and thresholds into a configuration file (e.g., config.yaml or config.py) for easier management.
-
-Final Data Schema (AnalyticalRecord): Double-check that the AnalyticalRecord model in merge_health_dietary.py includes all the columns you anticipate needing for your analysis phase.
+The completeness issues (e.g., missing Population, BMI, some health outcomes only available for later years) are expected given the data sources and are correctly captured as NaN/None. This is perfectly fine – handling missing data is a standard part of time-series analysis.
 
 Readiness for Analytics:
 
-The project is well-positioned to move into the analytics phase. The core ETL pipeline appears functional and produces the final analytical_data_australia_final.csv. The recent debugging efforts have likely resolved critical data integrity issues.
+Excellent! The ETL pipeline is demonstrably producing the target dataset. The structure is suitable for time-series analysis and exploring diet-health relationships.
 
-However, before diving deep into modeling, I strongly recommend addressing the Testing Suite Update (Point 1) and Deprecated Code Clarification (Point 2). A reliable test suite ensures that future code changes don't break the ETL pipeline and that the data asset remains consistent and correct. Cleaning up deprecated code simplifies maintenance.
+The remaining test issues are isolated to AIHW processing edge cases/standardisation and don't seem to block the generation of the main dataset components used for the core analysis (FAOSTAT-derived dietary metrics, NCD-RisC metrics, lagged variables).
 
-Addressing the other points (Semantic Matching Workflow, Scraping Fragility, Manual Steps, Configuration) will further improve robustness and maintainability but are less critical before starting initial analysis, provided you are aware of the current limitations (like the hardcoded mapping and scraping fragility).
+Next Steps & Analytics Focus:
 
-Recommendations:
+Fix Remaining Tests (Recommended but not Blocking):
 
-Prioritize Test Updates: Update existing tests to match the refactored code. Remove obsolete tests. Add tests for critical/complex logic. Ensure tests pass consistently.
+Adjust test_process_aihw_excel to reflect the expected outcome (either data extraction from suitable test sheets or asserting no file creation for the current minimal test sheets).
 
-Clarify/Remove Deprecated Code: Confirm and remove src/data_processing/process_la_content.py and src/data_processing/merge_datasets.py if they are no longer used.
+Standardise the 'persons'/'all' discrepancy between process_aihw_data.py (Table 11 handling) and tests/test_process_aihw_data.py::test_process_sheet_table11. Choose one term ('persons' is likely better) and update both.
 
-Verify Final Output: After addressing tests, run python -m src.run_etl --force --no-download one more time. Manually inspect the logs for warnings/errors and spot-check the final analytical_data_australia_final.csv for expected columns, data ranges, and completeness, paying attention to the recently fixed columns (Carbs, Dementia/CVD metrics).
+Address Manual Data (If Needed for This Analysis): If you intend to use ABS or IHME data now, implement the processing logic (as outlined in planning.md and stubbed in process_abs_ihme_data.py) and integrate it into health_outcome_metrics.py or run_etl.py. Otherwise, you can proceed with the current dataset and add these later.
 
-(Optional but Recommended): Refine the FAO/LA mapping workflow (clarify semantic matching role) and consider moving key settings to a config file.
+Analytics & Visualisation (Using the Final CSV):
 
-You've built a comprehensive ETL system. With a bit more focus on testing and cleanup, you'll have a very strong foundation for your data science and visualization work.
+Load Data: Use src.visualisation.utils.load_unified_dataset() in your analysis notebooks or scripts.
+
+Handle Missing Data: Be mindful of the NaN values. Strategies:
+
+Pairwise Analysis: When comparing two variables (e.g., scatter plot, correlation), automatically exclude rows where either variable is missing for that specific comparison. Pandas/Seaborn often do this by default.
+
+Model Imputation: For regression models requiring complete data, consider imputation techniques (e.g., forward fill, mean/median imputation, or more sophisticated methods like KNNImputer or IterativeImputer from scikit-learn), but apply them cautiously and justify the choice. Often, it's better to filter the dataset to the time range where all required variables for a specific model are present.
+
+Time-Range Filtering: For specific analyses (e.g., modeling obesity vs. lagged LA), filter the DataFrame to the years where both variables are non-null.
+
+Visual Storytelling (Portfolio Focus):
+
+(Lead Visual): Start with a compelling time series plot (plot_time_series) showing LA_Intake_percent_calories from 1961-2022. Annotate the dramatic rise.
+
+(Comparison Visuals): Create multi-panel plots or overlay plots (overlay_time_series) showing LA_Intake_percent_calories alongside key health outcomes like Obesity_Prevalence_AgeStandardised, Diabetes_Prevalence_Rate_AgeStandardised, and CVD_Mortality_Rate_ASMR over their respective available time ranges. This visually juxtaposes the trends.
+
+(Core Hypothesis Visuals): Generate lagged scatter plots (plot_lagged_scatter or seaborn.regplot) for:
+
+Obesity_Prevalence_AgeStandardised vs. LA_perc_kcal_lag10 / LA_perc_kcal_lag15
+
+Diabetes_Prevalence_Rate_AgeStandardised vs. LA_perc_kcal_lag10 / LA_perc_kcal_lag15
+
+CVD_Mortality_Rate_ASMR vs. LA_perc_kcal_lag15 / LA_perc_kcal_lag20
+
+Enhancement: Colour points by decade to see temporal changes in the relationship.
+
+(Contextual Visuals): Show time series of Total_Calorie_Supply, Total_Fat_Supply_g, and Plant_Fat_Ratio to provide dietary context.
+
+(Correlation Summary): Include the correlation heatmap (plot_correlation_heatmap) focusing on correlations between lagged LA variables and health outcomes.
+
+(Advanced Visual - Optional): If you explore GAMs (plot_gam), the partial dependence plots showing the non-linear effect of lagged LA intake on health outcomes can be very insightful and visually distinct.
+
+Execution: Use the functions in your src/visualisation/ modules. You can call them from a Jupyter Notebook or a dedicated analysis script (e.g., src/run_analysis.py).
+
+You've successfully built the data foundation. The final CSV looks good, and the remaining minor test issues shouldn't prevent you from starting the exciting analytics and visualisation phase. Focus on telling a clear story with your plots, highlighting the trends and lagged relationships. Good luck!

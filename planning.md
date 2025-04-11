@@ -43,10 +43,10 @@ This project investigates the relationship between seed oil intake (focusing on 
 * **Objective**: Model and analyze relationships using the final data asset.
 * **Tasks**: EDA, MLR, GAMs, Optional: Time Series Models, Tree-Based Models. Interpret results, document findings and limitations (ecological fallacy, confounders, *data source differences/time ranges*).
 
-### Phase 4: Visualization and Deployment (Unchanged)
+### Phase 4: visualisation and Deployment (Unchanged)
 
 * **Objective**: Present findings effectively.
-* **Tasks**: Visualizations, deployment (GitHub Pages).
+* **Tasks**: visualisations, deployment (GitHub Pages).
 
 ## Data Sources
 
@@ -101,7 +101,7 @@ This project investigates the relationship between seed oil intake (focusing on 
   * ABS CoD metrics (Dementia/CVD Mortality) available from ~1980.
   * IHME GBD metrics (Dementia/CVD Prevalence/Incidence) available from 1990.
 * Explanatory/Predictive Models analyzing associations, accounting for varying time ranges of outcomes.
-* Comprehensive documentation, including processing of ABS/GBD data, limitations (modelled data, ICD changes), and visualizations.
+* Comprehensive documentation, including processing of ABS/GBD data, limitations (modelled data, ICD changes), and visualisations.
 * Portfolio-ready project.
 
 ## Current Status (April 2025)

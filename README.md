@@ -14,7 +14,7 @@ This project investigates the relationship between seed oil intake (focusing on 
 │   ├── download_data.py          # Data download utilities
 │   ├── data_processing/          # Core data processing modules
 │   ├── models/                   # Pydantic models
-│   └── visualization/            # Plotting and visualisation scripts
+│   └── visualisation/            # Plotting and visualisation scripts
 ├── tests/                       # Pytest suite covering all modules
 ├── planning.md                  # Project planning and architecture
 ├── tasks.md                     # Task tracking
@@ -60,19 +60,18 @@ The project uses data from:
 
 **Note:** The data extraction from Fire in a Bottle relies on the website providing data within <pre> tags in a specific pipe-delimited format. This approach is inherently fragile—if the website structure changes, the scraping script (`src/data_processing/scrape_fire_in_bottle.py`) may fail and require maintenance. Please check the script and update it if the data source is modified.
 
-## Manual Data Acquisition (ABS & IHME)
+## Manual Data Acquisition (IHME only)
 
-Some health outcome datasets (notably ABS Causes of Death and IHME Global Burden of Disease) require manual download due to licensing or access restrictions. These files are not included in the repository and must be acquired and placed in the correct location before running the full ETL pipeline.
-
-- **ABS Causes of Death:**
-  - Download the main data cube from the [ABS Causes of Death Australia](https://www.abs.gov.au/statistics/health/causes-death/causes-death-australia) website (navigate to the latest release and download the relevant Excel file).
-  - Place the downloaded file(s) in the `data/raw/` directory. The expected filename(s) are referenced in `src/config.py` and `src/data_processing/health_outcome_metrics.py`.
+Some health outcome datasets (notably IHME Global Burden of Disease) require manual download due to licensing or access restrictions. These files are not included in the repository and must be acquired and placed in the correct location before running the full ETL pipeline.
 
 - **IHME GBD:**
-  - Use the [IHME GBD Results Tool](https://vizhub.healthdata.org/gbd-results/) to select Australia, the relevant causes (e.g., Dementia, CVD), and the required measures (prevalence, incidence, deaths, etc.). Download the resulting CSV files.
-  - Place these files in the `data/raw/` directory. The expected filenames are referenced in `src/config.py` and `src/data_processing/health_outcome_metrics.py`.
+  - Use the [IHME GBD Results Tool](https://vizhub.healthdata.org/gbd-results/) to select Australia, the relevant causes (e.g., Dementia, CVD), and the required measures (prevalence, incidence, deaths, etc.).
+  - Download the data as a single zip file (e.g., `IHME-GBD_2021_DATA-31d73d81-1.zip`).
+  - Place the downloaded zip file in the `data/raw/` directory. The pipeline will automatically extract and process the required CSVs from this zip file.
 
-If these files are not present, the ETL pipeline will skip the corresponding processing steps or raise a warning. For more details, see comments in the relevant processing scripts.
+If this file is not present, the ETL pipeline will skip the corresponding processing steps or raise a warning. For more details, see comments in the relevant processing scripts.
+
+**Note:** The ABS Causes of Death data is now automatically downloaded by the pipeline and does not require manual acquisition.
 
 For detailed information about data sources and project planning, see `planning.md`.
 

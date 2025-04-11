@@ -67,3 +67,124 @@ def test_find_and_parse_pre_blocks_partial_columns():
     assert df is not None
     assert 'percent' not in df.columns
     assert df['food_name'].iloc[0] == 'Sunflower Oil'
+def test_fallback_to_code_tag():
+    """Test fallback to <code> tag when no <pre> is present (Australian English)."""
+    html = """
+    <html><body>
+    <code>
+    | Food | la_cal | cal | percent |
+    |------|--------|-----|---------|
+    | Sunflower Oil | 120 | 124 | 97 |
+    </code>
+    </body></html>
+    """
+    soup = BeautifulSoup(html, "html.parser")
+def test_tolerant_to_missing_trailing_pipes():
+    """Test parser tolerance to missing trailing pipes and extra whitespace (Australian English)."""
+    html = """
+    <html><body>
+    <pre>
+    | Food | la_cal | cal | percent
+    |------|--------|-----|--------
+    | Sunflower Oil | 120 | 124 | 97
+    | Corn Oil | 95 | 120 | 79
+    </pre>
+    </body></html>
+    """
+    soup = BeautifulSoup(html, "html.parser")
+def test_header_data_row_mismatch():
+    """Test parser tolerance to header/data row mismatch (Australian English)."""
+    html = """
+    <html><body>
+    <pre>
+    | Food | la_cal | cal | percent |
+    |------|--------|-----|---------|
+    | Sunflower Oil | 120 | 124 |
+    | Corn Oil | 95 | 120 | 79 | extra |
+    </pre>
+    </body></html>
+    """
+    soup = BeautifulSoup(html, "html.parser")
+    df = find_and_parse_pre_blocks(soup)
+    assert df is not None
+def test_multiple_blocks_one_valid():
+    """Test multiple blocks, only one valid (Australian English)."""
+    html = """
+    <html><body>
+    <pre>Not a table</pre>
+    <pre>
+    | Food | la_cal | cal | percent |
+    |------|--------|-----|---------|
+    | Sunflower Oil | 120 | 124 | 97 |
+    </pre>
+    </body></html>
+    """
+    soup = BeautifulSoup(html, "html.parser")
+def test_unrecoverable_malformed_table():
+    """Test unrecoverable malformed table returns None (Australian English)."""
+    html = """
+    <html><body>
+    <pre>
+    This is not a table at all
+    No pipes or headers
+    </pre>
+    </body></html>
+    """
+    soup = BeautifulSoup(html, "html.parser")
+    df = find_and_parse_pre_blocks(soup)
+    assert df is None
+
+    df = find_and_parse_pre_blocks(soup)
+    assert df is not None
+    assert len(df) == 1
+    assert df['food_name'].iloc[0] == 'Sunflower Oil'
+
+    assert len(df) == 2
+    # Should pad/truncate as needed, and not crash
+    assert df['food_name'].iloc[0] == 'Sunflower Oil'
+    assert df['food_name'].iloc[1] == 'Corn Oil'
+
+    df = find_and_parse_pre_blocks(soup)
+    assert df is not None
+    assert len(df) == 2
+    assert set(df.columns) >= {'food_name', 'la_cal', 'cal', 'percent'}
+
+    df = find_and_parse_pre_blocks(soup)
+    assert df is not None
+    assert len(df) == 1
+    assert df['food_name'].iloc[0] == 'Sunflower Oil'
+
+
+def test_fallback_to_div_tag():
+    """Test fallback to <div> tag with table-like content (Australian English)."""
+    html = """
+    <html><body>
+    <div>
+    | Food | la_cal | cal | percent |
+    |------|--------|-----|---------|
+    | Sunflower Oil | 120 | 124 | 97 |
+    </div>
+    </body></html>
+    """
+    soup = BeautifulSoup(html, "html.parser")
+    df = find_and_parse_pre_blocks(soup)
+    assert df is not None
+    assert len(df) == 1
+    assert df['food_name'].iloc[0] == 'Sunflower Oil'
+
+    """Test fallback to <code> tag when no <pre> is present (Australian English)."""
+    html = """
+    <html><body>
+    <code>
+    | Food | la_cal | cal | percent |
+    |------|--------|-----|---------|
+    | Sunflower Oil | 120 | 124 | 97 |
+    </code>
+    </body></html>
+    """
+    soup = BeautifulSoup(html, "html.parser")
+    df = find_and_parse_pre_blocks(soup)
+    assert df is not None
+    assert len(df) == 1
+    assert df['food_name'].iloc[0] == 'Sunflower Oil'
+

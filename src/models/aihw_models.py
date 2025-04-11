@@ -7,15 +7,22 @@ including prevalence, mortality, and other health metrics.
 from enum import Enum
 from typing import Optional, List
 from datetime import datetime
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator, ConfigDict
 
 class MetricType(str, Enum):
-    """Types of health metrics in AIHW data."""
+    """Types of health metrics in AIHW data.
+
+    Includes number, rate, percentage, crude rate, standardised rate,
+    prevalence, mortality, and incidence. All values use Australian English spelling.
+    """
     NUMBER = "number"
     RATE = "rate"
     PERCENTAGE = "percentage"
     CRUDE_RATE = "crude_rate"
     STANDARDISED_RATE = "standardised_rate"
+    PREVALENCE = "prevalence"
+    MORTALITY = "mortality"
+    INCIDENCE = "incidence"
 
 class AIHWRecord(BaseModel):
     """A single record of AIHW health data."""
@@ -37,7 +44,7 @@ class AIHWRecord(BaseModel):
     table_name: Optional[str] = Field(None, description="Name of the table in the sheet")
     notes: Optional[List[str]] = Field(None, description="Any notes associated with the data point")
     
-    @validator('sex')
+    @field_validator('sex')
     def validate_sex(cls, v):
         """Standardise sex values."""
         if not v:
@@ -51,7 +58,7 @@ class AIHWRecord(BaseModel):
             return 'persons'
         return v
     
-    @validator('age_group')
+    @field_validator('age_group')
     def validate_age_group(cls, v):
         """Standardise age group format."""
         if not v:
@@ -64,7 +71,7 @@ class AIHWRecord(BaseModel):
         v = v.replace(' ', '').replace('–', '-')  # standardise dash
         return v
     
-    @validator('value')
+    @field_validator('value')
     def validate_value(cls, v):
         """Ensure value is numeric and non-negative."""
         if v is None:
@@ -84,9 +91,8 @@ class AIHWDataset(BaseModel):
     source_file: str = Field(..., description="Name of the source Excel file")
     processed_date: datetime = Field(default_factory=datetime.now, description="When the data was processed")
     
-    class Config:
-        """Pydantic configuration."""
-        json_schema_extra = {
+    model_config: ConfigDict = ConfigDict(
+        json_schema_extra={
             "example": {
                 "records": [{
                     "year": 2023,
@@ -101,4 +107,5 @@ class AIHWDataset(BaseModel):
                 "source_file": "AIHW-DEM-02-S2-Prevalence.xlsx",
                 "processed_date": "2024-04-05T11:57:51"
             }
-        } 
+        }
+    )

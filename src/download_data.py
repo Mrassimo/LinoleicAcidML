@@ -65,8 +65,13 @@ FILES_TO_DOWNLOAD = [
         "type": "excel",
         "headers": {
             'Accept': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-            'Referer': 'https://www.aihw.gov.au/'
+            "Referer": "https://www.aihw.gov.au/"
         }
+    },
+    {
+        "url": config.ABS_CAUSES_OF_DEATH_URL,
+        "filename": config.ABS_CAUSES_OF_DEATH_FILENAME,
+        "type": "excel"
     },
     {
         "url": config.FAOSTAT_FBS_URL,

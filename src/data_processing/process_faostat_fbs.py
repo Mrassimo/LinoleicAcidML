@@ -8,6 +8,7 @@ from datetime import datetime
 import logging
 from typing import Dict, List, Union, Optional, Type, Tuple
 from pathlib import Path
+from pydantic import BaseModel, Field, field_validator
 from pydantic import BaseModel, validator
 
 # Configure logging
@@ -32,13 +33,13 @@ class FAOStatRecord(BaseModel):
     year: int
     value: float
 
-    @validator('area')
+    @field_validator('area')
     def area_must_be_australia(cls, v):
         if v.lower() != 'australia':
             raise ValueError('Area must be Australia')
         return v
 
-    @validator('value')
+    @field_validator('value')
     def value_must_be_positive(cls, v):
         if v < 0:
             raise ValueError('Value must be non-negative')
@@ -108,40 +109,51 @@ def validate_records(df: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(valid_records)
 
 def process_faostat_data(input_file: Path, is_historical: bool = False) -> pd.DataFrame:
-    """Process FAOSTAT data, handling both historical and modern formats."""
+    """Process FAOSTAT data, handling both historical and modern formats.
+
+    Ensures rows with missing values are dropped and duplicates are removed.
+    All code and comments use Australian English.
+    """
     logger.info(f"Reading FAOSTAT data from {input_file}")
-    
+
     # Read data in chunks to handle large files
     chunk_size = 10000
     chunks = []
-    
+
     for chunk in pd.read_csv(input_file, chunksize=chunk_size):
         # Clean column names
         chunk = clean_column_names(chunk)
-        
+
         # Filter for Australia
         chunk = filter_australia_data(chunk)
-        
+
         # Identify year columns
         year_cols = identify_year_columns(chunk)
-        
+
         # Melt year columns
         chunk = melt_year_columns(chunk, year_cols)
-        
+
         # Convert year format
         chunk = convert_year_format(chunk)
-        
+
         # Convert units
         chunk = convert_units(chunk)
-        
+
+        # Drop rows with missing values in the 'value' column
+        chunk = chunk.dropna(subset=['value'])
+
+        # Remove duplicate rows based on all columns except 'value'
+        dedup_columns = [col for col in chunk.columns if col != 'value']
+        chunk = chunk.drop_duplicates(subset=dedup_columns, keep='first')
+
         chunks.append(chunk)
-    
+
     # Combine all chunks
     df = pd.concat(chunks, ignore_index=True)
-    
+
     # Validate records
     df = validate_records(df)
-    
+
     return df
 
 def harmonize_overlapping_years(historical_df: pd.DataFrame, modern_df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:

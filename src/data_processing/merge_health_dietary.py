@@ -17,7 +17,9 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 class AnalyticalRecord(BaseModel):
-    """Pydantic model for validating analytical records"""
+    """Pydantic model for validating analytical records.
+    All field names and comments use Australian English.
+    """
     Year: int = Field(..., ge=1961, le=2024)
     # Dietary metrics (current year)
     Total_LA_Intake_g_per_capita_day: float = Field(..., ge=0)
@@ -27,10 +29,12 @@ class AnalyticalRecord(BaseModel):
     Total_Fat_Supply_g: float = Field(..., ge=0)
     Total_Carb_Supply_g: Optional[float] = Field(None, ge=0)
     Total_Protein_Supply_g: Optional[float] = Field(None, ge=0)
+    Population: Optional[float] = Field(None, ge=0, description="Estimated population for the year (used for per capita calculations)")
     # Health outcomes (optional, from NCD-RisC and AIHW datasets)
     Diabetes_Prevalence_Rate_AgeStandardised: Optional[float] = Field(None)
     Diabetes_Treatment_Rate_AgeStandardised: Optional[float] = Field(None)
     Obesity_Prevalence_AgeStandardised: Optional[float] = Field(None)
+    BMI_AgeStandardised: Optional[float] = Field(None, ge=0, description="Body Mass Index, age-standardised")
     Total_Cholesterol_AgeStandardised: Optional[float] = Field(None)
     NonHDL_Cholesterol_AgeStandardised: Optional[float] = Field(None)
     # Updated AIHW metrics
@@ -42,7 +46,7 @@ class AnalyticalRecord(BaseModel):
     LA_perc_kcal_lag10: Optional[float] = Field(None)
     LA_perc_kcal_lag15: Optional[float] = Field(None)
     LA_perc_kcal_lag20: Optional[float] = Field(None)
-    
+
     # Validators for optional fields
     @field_validator('*')
     def check_non_negative_optional(cls, v, info):

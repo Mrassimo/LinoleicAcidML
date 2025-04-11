@@ -46,16 +46,20 @@ def test_extract_ncd_risc_metrics_basic(diabetes_df, bmi_df, cholesterol_df):
 
 
 def test_extract_ncd_risc_metrics_missing_cols(bmi_df, cholesterol_df):
-    """Test handling when diabetes data is missing required columns."""
-    incomplete_diabetes_df = pd.DataFrame({
-        'year': [2000],
-        'sex': ['Men'],
-        # Missing required columns
-    })
-    with patch.object(hom, 'load_and_validate_csv', side_effect=[incomplete_diabetes_df, bmi_df, cholesterol_df]):
+    """Test handling when diabetes data is missing required columns (Australian English)."""
+    # Simulate load_and_validate_csv returning None for missing columns
+    with patch.object(hom, 'load_and_validate_csv', side_effect=[None, bmi_df, cholesterol_df]):
         df = hom.extract_ncd_risc_metrics()
-        # Should still return a DataFrame, but diabetes metrics may be missing or NaN
+        # Should still return a DataFrame, but diabetes metrics columns should be missing or all NaN
         assert df is not None
+        assert isinstance(df, pd.DataFrame)
+        # Diabetes metrics columns should not be present if diabetes data is missing
+        diabetes_cols = [
+            "Diabetes_Prevalence_Rate_AgeStandardised",
+            "Diabetes_Treatment_Rate_AgeStandardised"
+        ]
+        for col in diabetes_cols:
+            assert col not in df.columns or df[col].isna().all()
 
 
 def test_load_and_validate_csv_missing_file(tmp_path):

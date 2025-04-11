@@ -61,13 +61,15 @@ def test_pydantic_validation(sample_data, tmp_path):
     # Test validation of bad year (should raise ValueError if year is not int or out of range)
     bad_year = good_record.copy()
     bad_year['year'] = 1950  # Not Australia FBS range
-    with pytest.raises(Exception):
+    import pydantic
+
+    with pytest.raises(pydantic.ValidationError):
         FAOStatRecord(**bad_year)
 
     # Test validation of negative value
     bad_value = good_record.copy()
     bad_value['value'] = -5
-    with pytest.raises(Exception):
+    with pytest.raises(pydantic.ValidationError):
         FAOStatRecord(**bad_value)
 
 def test_missing_value_handling(tmp_path):

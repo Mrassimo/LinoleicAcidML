@@ -61,4 +61,7 @@ LA_CONTENT_FIREINABOTTLE_PROCESSED_FILE = PROCESSED_DATA_DIR / "la_content_firei
 SENTENCE_TRANSFORMER_MODEL = "all-MiniLM-L6-v2"
 
 # === Miscellaneous ===
+# ABS Causes of Death (Australia) 2023 Excel file
+ABS_CAUSES_OF_DEATH_URL = "https://www.abs.gov.au/statistics/health/causes-death/causes-death-australia/2023/2023_01%20Underlying%20causes%20of%20death%20%28Australia%29.xlsx"
+ABS_CAUSES_OF_DEATH_FILENAME = "2023_01 Underlying causes of death (Australia).xlsx"
 # Add any additional configuration parameters here as needed.

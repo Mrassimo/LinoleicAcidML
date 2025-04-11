@@ -33,11 +33,11 @@ EXPECTED_COLUMNS = [
 
 def find_and_parse_pre_blocks(soup: BeautifulSoup) -> pd.DataFrame | None:
     """
-    Finds <pre> blocks potentially containing the data and parses them.
+    Robustly finds and parses data blocks (preferably <pre>, but will try <code> and <div> as fallback)
+    containing pipe-delimited tables. Handles missing, malformed, or changed website structure gracefully.
 
-    WARNING: This function is highly dependent on the current structure of the source website.
-    It specifically looks for <pre> tags containing pipe-delimited tables. If the website
-    changes its structure or removes these <pre> tags, this function will fail.
+    This function is designed to be tolerant of minor format issues and will attempt to recover data
+    from alternative tags if <pre> is missing. All error messages and comments use Australian English.
 
     Args:
         soup: A BeautifulSoup object representing the parsed HTML.
@@ -45,137 +45,140 @@ def find_and_parse_pre_blocks(soup: BeautifulSoup) -> pd.DataFrame | None:
     Returns:
         A pandas DataFrame containing the combined parsed data, or None if parsing fails.
     """
+
+    def parse_table_text_block(text: str, block_label: str = "<unknown>") -> pd.DataFrame | None:
+        """
+        Attempt to parse a text block as a pipe-delimited table.
+        Returns a DataFrame or None if parsing fails.
+        """
+        # Remove separator lines (e.g., +----+---+)
+        lines = [line for line in text.strip().split('\n') if not line.strip().startswith('+')]
+        # Keep only lines that look like table rows (start with '|' or contain multiple pipes)
+        potential_lines = [line for line in lines if line.strip().startswith('|') or line.count('|') >= 2]
+        if not potential_lines:
+            logging.info(f"No table-like lines found in {block_label}. Skipping.")
+            return None
+
+        # Try to extract headers from the first valid line
+        header_line = potential_lines[0]
+        headers = [h.strip() for h in header_line.strip('|').split('|')]
+        if not headers or all(h == "" for h in headers):
+            logging.warning(f"Could not extract headers from {block_label}. Skipping.")
+            return None
+
+        # Parse data rows, tolerate minor mismatches (pad/truncate as needed)
+        parsed_rows = []
+        for line in potential_lines[1:]:
+            if not line.strip():
+                continue
+            parts = [p.strip() for p in line.strip('|').split('|')]
+            # Pad or truncate to match header length
+            if len(parts) < len(headers):
+                parts += [None] * (len(headers) - len(parts))
+            elif len(parts) > len(headers):
+                parts = parts[:len(headers)]
+            parsed_rows.append(parts)
+
+        if not parsed_rows:
+            logging.warning(f"No data rows successfully parsed from {block_label}.")
+            return None
+
+        df_block = pd.DataFrame(parsed_rows, columns=headers)
+        logging.info(f"Parsed {len(df_block)} rows from {block_label}.")
+
+        # --- Column Renaming and Selection ---
+        column_mapping_found = {}
+        actual_cols_lower = [col.lower() for col in df_block.columns]
+        if 'food' in actual_cols_lower:
+            column_mapping_found[df_block.columns[actual_cols_lower.index('food')]] = 'food_name'
+        if 'la_cal' in actual_cols_lower:
+            column_mapping_found[df_block.columns[actual_cols_lower.index('la_cal')]] = 'la_cal'
+        if 'cal' in actual_cols_lower:
+            column_mapping_found[df_block.columns[actual_cols_lower.index('cal')]] = 'cal'
+        if 'percent' in actual_cols_lower:
+            column_mapping_found[df_block.columns[actual_cols_lower.index('percent')]] = 'percent'
+
+        df_block = df_block.rename(columns=column_mapping_found)
+        final_block_cols = [col for col in EXPECTED_COLUMNS if col in df_block.columns]
+        if final_block_cols:
+            df_block_final = df_block[final_block_cols]
+            return df_block_final
+        else:
+            logging.warning(f"Could not map required columns ({EXPECTED_COLUMNS}) in {block_label}. Skipping this block.")
+            return None
+
+    # Try <pre> tags first
     pre_tags = soup.find_all('pre')
     logging.info(f"Found {len(pre_tags)} <pre> tag(s).")
-
-    if not pre_tags:
-        logging.error("No <pre> tags found on the page. The website structure may have changed. "
-                      "This script is fragile to such changes.")
-        return None
-
-    if len(pre_tags) > 1:
-        logging.warning(f"More than one <pre> tag found ({len(pre_tags)}). "
-                        "If the data is not in the first tag, this may indicate a site structure change.")
-
     all_data = []
     found_data = False
 
-    for i, pre_tag in enumerate(pre_tags):
-        logging.info(f"Processing <pre> tag {i}...")
-        pre_text = pre_tag.get_text()
+    if pre_tags:
+        for i, pre_tag in enumerate(pre_tags):
+            logging.info(f"Processing <pre> tag {i}...")
+            pre_text = pre_tag.get_text()
+            # Heuristic: Only try to parse if it looks like a table
+            if '|' in pre_text and 'food' in pre_text.lower():
+                df_block = parse_table_text_block(pre_text, block_label=f"<pre> tag {i}")
+                if df_block is not None:
+                    all_data.append(df_block)
+                    found_data = True
+            else:
+                logging.info(f"<pre> tag {i} does not appear to contain the formatted data table. Skipping.")
+    else:
+        logging.warning("No <pre> tags found. Attempting to find data in <code> or <div> tags as fallback.")
 
-        # Heuristic: Check if the text looks like the data table format
-        # Check for the header separator line ('+-'), pipe delimiters '|', and 'food' keyword
-        if '+-' in pre_text and '|' in pre_text and 'food' in pre_text.lower():
-            logging.info(f"<pre> tag {i} seems to contain formatted data. Attempting to parse.")
+        # Try <code> tags
+        code_tags = soup.find_all('code')
+        for i, code_tag in enumerate(code_tags):
+            code_text = code_tag.get_text()
+            if '|' in code_text and 'food' in code_text.lower():
+                logging.info(f"Processing <code> tag {i} as fallback...")
+                df_block = parse_table_text_block(code_text, block_label=f"<code> tag {i}")
+                if df_block is not None:
+                    all_data.append(df_block)
+                    found_data = True
 
-            try:
-                # Clean the text block: remove separator lines starting with '+'
-                lines = pre_text.strip().split('\n')
-                # Keep only lines that start with '|' (potential header or data)
-                potential_lines = [line for line in lines if line.strip().startswith('|')]
-
-                if not potential_lines:
-                     logging.warning(f"No lines starting with '|' found in <pre> tag {i}. Skipping.")
-                     continue
-
-                # Strategy: Read line by line, split by '|', strip whitespace
-                parsed_rows = []
-                temp_headers = []
-
-                # Extract headers from the first valid line
-                # Assumes the first line starting with '|' is the header
-                header_line = potential_lines[0]
-                temp_headers = [h.strip() for h in header_line.strip('|').split('|')]
-                logging.info(f"Extracted headers from <pre> tag {i}: {temp_headers}")
-
-                # Process data rows (starting from the second potential line)
-                for line in potential_lines[1:]:
-                    # Ensure it's a data row (starts with '|')
-                    if line.strip().startswith('|'):
-                        parts = [p.strip() for p in line.strip('|').split('|')]
-                        # Check if the number of parts matches the number of headers
-                        if len(parts) == len(temp_headers):
-                            parsed_rows.append(parts)
-                        else:
-                            logging.warning(f"Skipping line in <pre> tag {i} due to mismatched parts count ({len(parts)} vs {len(temp_headers)} expected): {line}")
-
-                if not parsed_rows:
-                     logging.warning(f"No data rows successfully parsed from <pre> tag {i}.")
-                     continue
-
-                # Create DataFrame for this block using extracted headers
-                df_block = pd.DataFrame(parsed_rows, columns=temp_headers)
-                logging.info(f"Parsed {len(df_block)} rows from <pre> tag {i}.")
-
-                # --- Column Renaming and Selection ---
-                # Rename based on the actual headers found to match EXPECTED_COLUMNS standard names
-                column_mapping_found = {}
-                actual_cols_lower = [col.lower() for col in df_block.columns]
-
-                # Map based on common variations found in the <pre> block headers
-                if 'food' in actual_cols_lower:
-                    column_mapping_found[df_block.columns[actual_cols_lower.index('food')]] = 'food_name'
-                if 'la_cal' in actual_cols_lower:
-                     column_mapping_found[df_block.columns[actual_cols_lower.index('la_cal')]] = 'la_cal'
-                if 'cal' in actual_cols_lower:
-                     column_mapping_found[df_block.columns[actual_cols_lower.index('cal')]] = 'cal'
-                if 'percent' in actual_cols_lower: # Check for 'percent' based on definitions
-                     column_mapping_found[df_block.columns[actual_cols_lower.index('percent')]] = 'percent'
-
-                df_block = df_block.rename(columns=column_mapping_found)
-
-                # Select only the columns matching our EXPECTED_COLUMNS list
-                final_block_cols = [col for col in EXPECTED_COLUMNS if col in df_block.columns]
-
-                if final_block_cols:
-                     # Ensure the DataFrame only contains the successfully mapped expected columns
-                     df_block_final = df_block[final_block_cols]
-                     all_data.append(df_block_final)
-                     found_data = True
-                     logging.info(f"Added data from <pre> tag {i} with columns: {final_block_cols}")
-                else:
-                     logging.warning(f"Could not map required columns ({EXPECTED_COLUMNS}) in <pre> tag {i}. Skipping this block.")
-
-
-            except Exception as e_parse:
-                logging.error(f"Error parsing content of <pre> tag {i}: {e_parse}", exc_info=True)
-                continue # Try next pre tag
-        else:
-            logging.info(f"<pre> tag {i} does not appear to contain the formatted data table based on heuristics. Skipping.")
-
+        # Try <div> tags (only those with table-like content)
+        if not found_data:
+            div_tags = soup.find_all('div')
+            for i, div_tag in enumerate(div_tags):
+                div_text = div_tag.get_text()
+                if '|' in div_text and 'food' in div_text.lower():
+                    logging.info(f"Processing <div> tag {i} as fallback...")
+                    df_block = parse_table_text_block(div_text, block_label=f"<div> tag {i}")
+                    if df_block is not None:
+                        all_data.append(df_block)
+                        found_data = True
 
     if not found_data:
-        logging.error("Could not find or parse any <pre> block containing the expected data format.")
+        logging.error("Could not find or parse any data block containing the expected data format in <pre>, <code>, or <div> tags.")
         return None
 
-    # Combine data from all parsed blocks
     if not all_data:
-         logging.error("No data was successfully extracted from any <pre> block.")
-         return None
+        logging.error("No data was successfully extracted from any data block.")
+        return None
 
     combined_df = pd.concat(all_data, ignore_index=True)
-    logging.info(f"Combined data from all parsed <pre> blocks. Total rows: {len(combined_df)}")
+    logging.info(f"Combined data from all parsed blocks. Total rows: {len(combined_df)}")
 
     # --- Final Data Cleaning and Type Conversion ---
-    # Ensure columns exist before attempting conversion
     for col in ['la_cal', 'cal', 'percent']:
         if col in combined_df.columns:
-            # Convert to numeric, replacing non-numeric values with NaN (Not a Number)
             original_dtype = combined_df[col].dtype
             combined_df[col] = pd.to_numeric(combined_df[col], errors='coerce')
             nan_count = combined_df[col].isna().sum()
             if nan_count > 0:
-                logging.warning(f"{nan_count} values in column '{col}' (original dtype: {original_dtype}) could not be converted to numeric.")
+                logging.warning(
+                    f"{nan_count} values in column '{col}' (original dtype: {original_dtype}) could not be converted to numeric."
+                )
         else:
-             logging.warning(f"Expected numeric column '{col}' not found in combined data for type conversion.")
+            logging.warning(f"Expected numeric column '{col}' not found in combined data for type conversion.")
 
-    # Ensure food_name is string and stripped (already done during parsing, but double-check)
     if 'food_name' in combined_df.columns:
         combined_df['food_name'] = combined_df['food_name'].astype(str).str.strip()
     else:
         logging.warning("Expected column 'food_name' not found in combined data.")
-
 
     return combined_df
 

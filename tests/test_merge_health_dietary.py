@@ -70,22 +70,24 @@ def test_analytical_record_validation():
     
     # Test invalid cases
     # Invalid year
-    with pytest.raises(ValueError) as exc_info:
+    import pydantic
+
+    with pytest.raises(pydantic.ValidationError) as exc_info:
         AnalyticalRecord(**{**valid_record, 'Year': 1900})
     assert "greater than or equal to 1961" in str(exc_info.value)
-    
+
     # Invalid LA intake percentage
-    with pytest.raises(ValueError) as exc_info:
+    with pytest.raises(pydantic.ValidationError) as exc_info:
         AnalyticalRecord(**{**valid_record, 'LA_Intake_percent_calories': 101.0})
     assert "less than or equal to 100" in str(exc_info.value)
-    
+
     # Invalid Plant Fat Ratio
-    with pytest.raises(ValueError) as exc_info:
+    with pytest.raises(pydantic.ValidationError) as exc_info:
         AnalyticalRecord(**{**valid_record, 'Plant_Fat_Ratio': 1.5})
     assert "less than or equal to 1" in str(exc_info.value)
-    
+
     # Invalid Total Cholesterol
-    with pytest.raises(ValueError) as exc_info:
+    with pytest.raises(pydantic.ValidationError) as exc_info:
         AnalyticalRecord(**{**valid_record, 'Total_Cholesterol_AgeStandardised': 9.0})
     assert "Total Cholesterol should be between 2 and 8 mmol/L" in str(exc_info.value)
     

@@ -36,9 +36,14 @@ def test_faostatrecord_valid_data(valid_fbs_data):
     assert record.area_code == valid_fbs_data['area_code']
     assert record.year == valid_fbs_data['year']
 
+import pydantic
+
 def test_faostatrecord_invalid_data(invalid_fbs_data):
-    """Test that invalid data fails FAOStatRecord validation"""
-    with pytest.raises(Exception):
+    """Test that invalid data fails FAOStatRecord validation (should raise pydantic.ValidationError).
+
+    This test ensures that invalid input to FAOStatRecord triggers a validation error, as per Australian data standards.
+    """
+    with pytest.raises(pydantic.ValidationError):
         FAOStatRecord(**invalid_fbs_data)
 
 # No FoodBalanceSchema in new code; skip item/element code-specific tests.
