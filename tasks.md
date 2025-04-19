@@ -122,36 +122,37 @@ This file tracks project tasks, reflecting decisions made after the reviews on 1
 ### Phase 6: Automation Enhancements (Optional)
 
 1. **[I] ABS Causes of Death Automation** (Investigated [Current Date])
-    * **Priority**: Low
-    * **Action**: Research if the ABS data cube can be downloaded programmatically.
-    * **Findings**: Investigation complete. Direct programmatic download via API/stable URL seems unlikely. Data is released as versioned Excel files. Automation would likely require manual URL updates in `src/download_data.py` per release cycle and Excel parsing, or potentially complex access via ABS TableBuilder/Microdata services. No code changes made.
-    * **Implementation**: If possible, add to `src/download_data.py`
-    * **Status**: Investigated - Automation difficult
-    * **Dependencies**: None
-    * **Effort**: Medium (for partial automation), High (for full automation if possible via other services)
 
+   * **Priority**: Low
+   * **Action**: Research if the ABS data cube can be downloaded programmatically.
+   * **Findings**: Investigation complete. Direct programmatic download via API/stable URL seems unlikely. Data is released as versioned Excel files. Automation would likely require manual URL updates in `src/download_data.py` per release cycle and Excel parsing, or potentially complex access via ABS TableBuilder/Microdata services. No code changes made.
+   * **Implementation**: If possible, add to `src/download_data.py`
+   * **Status**: Investigated - Automation difficult
+   * **Dependencies**: None
+   * **Effort**: Medium (for partial automation), High (for full automation if possible via other services)
 2. **Dependency Management**
-    * **Priority**: Low
-    * **Action**: Create `requirements.lock` for exact version pinning
-    * **Implementation**: Use `pip freeze`
-    * **Status**: Not started
-    * **Dependencies**: None
-    * **Effort**: Low
 
+   * **Priority**: Low
+   * **Action**: Create `requirements.lock` for exact version pinning
+   * **Implementation**: Use `pip freeze`
+   * **Status**: Not started
+   * **Dependencies**: None
+   * **Effort**: Low
 3. **CI/CD Pipeline**
-    * **Priority**: Low
-    * **Action**: Add GitHub Actions for automated testing
-    * **Implementation**: Create workflow files
-    * **Status**: Not started
-    * **Dependencies**: None
-    * **Effort**: Medium
 
+   * **Priority**: Low
+   * **Action**: Add GitHub Actions for automated testing
+   * **Implementation**: Create workflow files
+   * **Status**: Not started
+   * **Dependencies**: None
+   * **Effort**: Medium
 4. **Data Update Automation**
-    * **Priority**: Low
-    * **Action**: Create scripts for automated data updates
-    * **Implementation**: Add scheduling and validation
-    * **Status**: Not started
-    * **Dependencies**: ABS automation
-    * **Effort**: High
+
+   * **Priority**: Low
+   * **Action**: Create scripts for automated data updates
+   * **Implementation**: Add scheduling and validation
+   * **Status**: Not started
+   * **Dependencies**: ABS automation
+   * **Effort**: High
 
 Note: These improvements are optional and not critical for the project's core functionality or demonstration purposes.
