@@ -774,7 +774,7 @@ def process_aihw_excel(file_path: str, output_path: str) -> AIHWDataset:
             df = df.sort_values(sort_cols)
         
         # Drop any empty columns
-        df = df.dropna(axis=1, how='persons')
+        df = df.dropna(axis=1, how='all')
         
         # Drop duplicate records
         df = df.drop_duplicates()

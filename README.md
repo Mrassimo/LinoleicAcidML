@@ -1,90 +1,179 @@
 # Australian Health & Dietary Trends Analysis
 
-This project investigates the relationship between seed oil intake (focusing on linoleic acid) and metabolic health outcomes in Australia from 1980 to present. The analysis leverages dietary data from 1961 onward to provide historical context.
+This project investigates the relationship between seed oil intake (focusing on linoleic acid, LA) and metabolic health outcomes in Australia from 1980 to present. Through rigorous data engineering and statistical analysis, we explore associations between dietary patterns and health outcomes while acknowledging important limitations and confounding factors.
+
+## Key Findings
+
+Our analysis reveals several significant patterns:
+
+### Correlation Analysis
+- Strong positive correlations between LA intake and obesity/diabetes prevalence (r > 0.85)
+- Strong negative correlation with CVD mortality (r ≈ -0.94)
+- Moderate to strong positive correlations with CVD and dementia prevalence
+- Lag analysis suggests potential delayed effects, particularly for obesity
+
+### Advanced Modelling
+- GAMs reveal complex non-linear relationships between LA intake and health outcomes
+- Time series models effectively capture temporal patterns and seasonality
+- Tree-based models highlight LA intake as a consistently important predictor
+- Cross-validation across multiple modelling approaches increases result robustness
+
+For detailed findings, limitations, and caveats, see `reports/findings_and_limitations.md`.
+
+## Data Sources
+
+The analysis combines data from multiple authoritative sources:
+- FAOSTAT Food Balance Sheets (dietary data, 1961-present)
+- NCD Risk Factor Collaboration (diabetes, cholesterol, BMI, 1980-2022)
+- IHME Global Burden of Disease Study (dementia, CVD, 1990-present)
+- Australian Bureau of Statistics (mortality data, ~1980-present)
+
+## Features
+
+### Analysis Pipeline
+- Comprehensive data processing and validation
+- Multiple statistical modelling approaches:
+  - Generalized Additive Models (GAMs)
+  - Time Series Models (ARIMA, Prophet)
+  - Tree-Based Models (Random Forest, XGBoost)
+- Extensive correlation and lag analyses
+- Robust data validation using Pydantic
+
+### Interactive Dashboard
+- Time series visualisations with zoom/pan
+- Correlation heatmaps with detailed hover information
+- Scatter plots with trend lines and confidence intervals
+- Feature importance visualisations
+- Model comparison plots
+- GAM partial dependence plots
+
+## Local Development Setup
+
+### Prerequisites
+- Python 3.8+
+- pip package manager
+- Git
+
+### Installation
+
+1. Clone the repository:
+```bash
+git clone [repository-url]
+cd SeedoilsML
+```
+
+2. Create and activate a virtual environment (recommended):
+```bash
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+```
+
+3. Install dependencies:
+```bash
+pip install -r requirements.txt
+```
+
+### Data Processing Pipeline
+
+1. Download required data files:
+   - Place IHME GBD data zip file in `data/raw/`
+   - Download ABS Causes of Death data (if needed)
+   - NCD-RisC and FAOSTAT data are downloaded automatically
+
+2. Run the ETL pipeline:
+```bash
+python src/run_etl.py
+```
+
+3. Run the analysis:
+```bash
+python src/run_analysis.py
+```
+
+### Generating the Dashboard
+
+1. Generate the interactive dashboard:
+```bash
+python src/visualisation/create_dashboard.py
+```
+
+2. Start the local server:
+```bash
+python -m http.server 8000
+```
+
+3. View the dashboard:
+   Open `http://localhost:8000/figures/dashboard.html` in your browser
+
+## Using the Interactive Dashboard
+
+### Time Series Plots
+- **Zoom**: Use the zoom tools in the toolbar to focus on specific time periods
+- **Pan**: Click and drag to move through time periods
+- **Reset**: Double-click to reset the view
+- **Legend**: Click items to show/hide specific series
+- **Hover**: Move mouse over points for detailed values
+
+### Correlation Heatmaps
+- **Hover Details**: Move mouse over cells for exact correlation values
+- **Scale**: Colour intensity indicates correlation strength
+- **Interpretation**: Red = positive correlation, Blue = negative correlation
+
+### Scatter Plots
+- **Trend Lines**: Show relationship direction and confidence intervals
+- **Hover**: View exact values and additional metrics
+- **Zoom**: Focus on specific regions of interest
+- **Export**: Use camera icon to save plots as PNG files
+
+### Model Comparison Plots
+- **Performance Metrics**: Compare RMSE, MAPE, and R² across models
+- **Feature Importance**: View relative importance of predictors
+- **Hover**: See exact values and descriptions
+- **Legend**: Toggle different models and metrics
+
+### GAM Plots
+- **Partial Dependence**: Visualise non-linear relationships
+- **Confidence Bands**: Show uncertainty in relationships
+- **Interpretation Guide**: Available in hover text
+- **Export Options**: Save plots for presentations
 
 ## Project Structure
 
 ```
-.
-├── data/
-│   ├── raw/            # Raw data files
-│   └── processed/      # Processed and cleaned datasets
-├── src/
-│   ├── run_etl.py                # Main ETL pipeline entry point (run as module)
-│   ├── download_data.py          # Data download utilities
-│   ├── data_processing/          # Core data processing modules
-│   ├── models/                   # Pydantic models
-│   └── visualisation/            # Plotting and visualisation scripts
-├── tests/                       # Pytest suite covering all modules
-├── planning.md                  # Project planning and architecture
-├── tasks.md                     # Task tracking
-└── requirements.txt             # Python dependencies
+SeedoilsML/
+├── data/                  # Data files
+│   ├── processed/        # Processed datasets
+│   ├── raw/             # Original data sources
+│   └── staging/         # Intermediate processing
+├── figures/              # Generated visualisations
+│   ├── interactive/     # Interactive plot files
+│   ├── gam_analysis/    # GAM visualisations
+│   └── time_series/     # Time series plots
+├── reports/              # Analysis reports
+├── src/                  # Source code
+│   ├── analysis/        # Analysis modules
+│   ├── data_processing/ # Data processing scripts
+│   ├── models/         # Statistical models
+│   └── visualisation/  # Visualisation code
+├── tests/               # Test files
+└── requirements.txt     # Python dependencies
 ```
 
-The core data cleaning, transformation, and integration logic now resides in `src/data_processing/`. Previous standalone scripts have been modularised or removed.
+## Contributing
 
-## Setup
-
-1. Create a virtual environment:
-
-   ```bash
-   python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
-   ```
-2. Install dependencies:
-
-   ```bash
-   pip install -r requirements.txt
-   ```
-3. Run the ETL pipeline from the project root:
-
-   ```bash
-   python -m src.run_etl --no-download --force
-   ```
-
-   The above command executes the full ETL pipeline. Optional flags:
-
-   - `--no-download` to skip re-downloading data if already present
-   - `--force` to overwrite existing processed outputs
-
-   You can omit these flags or combine them as needed.
-
-## Data Sources
-
-The project uses data from:
-
-- NCD Risk Factor Collaboration (Diabetes, Cholesterol, BMI)
-- Australian Institute of Health and Welfare (Dementia, CVD)
-- FAOSTAT Food Balance Sheets
-- Fire in a Bottle (Linoleic acid content derived from - [U.S. Department of Agriculture](https://www.usda.gov/))
-
-**Note:** The data extraction from Fire in a Bottle relies on the website providing data within <pre> tags in a specific pipe-delimited format. This approach is inherently fragile—if the website structure changes, the scraping script (`src/data_processing/scrape_fire_in_bottle.py`) may fail and require maintenance. Please check the script and update it if the data source is modified.
-
-## Manual Data Acquisition (IHME only)
-
-Some health outcome datasets (notably IHME Global Burden of Disease) require manual download due to licensing or access restrictions. These files are not included in the repository and must be acquired and placed in the correct location before running the full ETL pipeline.
-
-- **IHME GBD:**
-  - Use the [IHME GBD Results Tool](https://vizhub.healthdata.org/gbd-results/) to select Australia, the relevant causes (e.g., Dementia, CVD), and the required measures (prevalence, incidence, deaths, etc.).
-  - Download the data as a single zip file (e.g., `IHME-GBD_2021_DATA-31d73d81-1.zip`).
-  - Place the downloaded zip file in the `data/raw/` directory. The pipeline will automatically extract and process the required CSVs from this zip file.
-
-If this file is not present, the ETL pipeline will skip the corresponding processing steps or raise a warning. For more details, see comments in the relevant processing scripts.
-
-**Note:** The ABS Causes of Death data is now automatically downloaded by the pipeline and does not require manual acquisition.
-
-For detailed information about data sources and project planning, see `planning.md`.
-
-## FAO/LA Mapping Workflow
-
-The mapping between FAOSTAT food items and linoleic acid (LA) content items is maintained manually for quality and transparency. The script `src/data_processing/semantic_matching.py` is provided as a manual helper tool: it generates candidate matches using semantic similarity to assist in curating the validated mapping. However, its output is not used directly in the automated ETL pipeline. The final mapping used in the pipeline is maintained in `src/data_processing/update_validation.py` and is updated manually based on expert review, optionally informed by the semantic matching results.
-
-If you update the mapping, please ensure changes are reflected in `update_validation.py` and not just in the semantic matching output.
-
-## Development Status
-
-See `tasks.md` for current development status and upcoming tasks.
+1. Fork the repository
+2. Create your feature branch
+3. Make your changes
+4. Run tests: `pytest`
+5. Submit a pull request
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+This project is licensed under the terms of the LICENSE file included in the repository.
+
+## Acknowledgments
+
+- NCD Risk Factor Collaboration for health metrics data
+- FAOSTAT for dietary data
+- IHME for Global Burden of Disease data
+- Australian Bureau of Statistics for mortality data

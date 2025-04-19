@@ -1,6 +1,6 @@
 """
 Extract standardized health outcome metrics from various processed data sources.
-Merges NCD-RisC and specific AIHW metrics into a single yearly dataset.
+Merges NCD-RisC, AIHW, and IHME metrics into a single yearly dataset.
 """
 
 import pandas as pd
@@ -234,6 +234,67 @@ def extract_aihw_metrics() -> Optional[pd.DataFrame]:
     logger.info(f"Processed AIHW metrics. Shape: {aihw_merged_df.shape}")
     return aihw_merged_df
 
+def extract_ihme_metrics() -> Optional[pd.DataFrame]:
+    """Extracts and standardizes metrics from processed IHME GBD files."""
+    logger.info("Processing IHME GBD data...")
+    all_ihme_metrics = []
+
+    # Load Dementia metrics from GBD
+    dementia_df = load_and_validate_csv(config.PROCESSED_DATA_DIR / 'gbd_dementia_metrics.csv', 
+                                      ['year', 'metric_type', 'value'])
+    if dementia_df is not None:
+        # Process prevalence rate
+        dementia_prev = dementia_df[dementia_df['metric_type'] == 'age_standardized_prevalence_rate'].copy()
+        if not dementia_prev.empty:
+            dementia_prev = dementia_prev[['year', 'value']].rename(
+                columns={'year': 'Year', 'value': 'Dementia_Prevalence_Rate_GBD'})
+            dementia_prev = dementia_prev.drop_duplicates(subset=['Year'], keep='first')
+            all_ihme_metrics.append(dementia_prev)
+            logger.info(f"Extracted Dementia Prevalence Rate (GBD): {dementia_prev.shape[0]} rows")
+
+        # Process mortality rate
+        dementia_mort = dementia_df[dementia_df['metric_type'] == 'age_standardized_death_rate'].copy()
+        if not dementia_mort.empty:
+            dementia_mort = dementia_mort[['year', 'value']].rename(
+                columns={'year': 'Year', 'value': 'Dementia_Mortality_Rate_GBD'})
+            dementia_mort = dementia_mort.drop_duplicates(subset=['Year'], keep='first')
+            all_ihme_metrics.append(dementia_mort)
+            logger.info(f"Extracted Dementia Mortality Rate (GBD): {dementia_mort.shape[0]} rows")
+
+    # Load CVD metrics from GBD
+    cvd_df = load_and_validate_csv(config.PROCESSED_DATA_DIR / 'gbd_cvd_metrics.csv', 
+                                 ['year', 'metric_type', 'value'])
+    if cvd_df is not None:
+        # Process prevalence rate
+        cvd_prev = cvd_df[cvd_df['metric_type'] == 'age_standardized_prevalence_rate'].copy()
+        if not cvd_prev.empty:
+            cvd_prev = cvd_prev[['year', 'value']].rename(
+                columns={'year': 'Year', 'value': 'CVD_Prevalence_Rate_GBD'})
+            cvd_prev = cvd_prev.drop_duplicates(subset=['Year'], keep='first')
+            all_ihme_metrics.append(cvd_prev)
+            logger.info(f"Extracted CVD Prevalence Rate (GBD): {cvd_prev.shape[0]} rows")
+
+        # Process mortality rate
+        cvd_mort = cvd_df[cvd_df['metric_type'] == 'age_standardized_death_rate'].copy()
+        if not cvd_mort.empty:
+            cvd_mort = cvd_mort[['year', 'value']].rename(
+                columns={'year': 'Year', 'value': 'CVD_Mortality_Rate_GBD'})
+            cvd_mort = cvd_mort.drop_duplicates(subset=['Year'], keep='first')
+            all_ihme_metrics.append(cvd_mort)
+            logger.info(f"Extracted CVD Mortality Rate (GBD): {cvd_mort.shape[0]} rows")
+
+    # Merge IHME metrics
+    if not all_ihme_metrics:
+        logger.warning("No IHME metrics could be processed.")
+        return None
+
+    ihme_merged_df = all_ihme_metrics[0]
+    for df in all_ihme_metrics[1:]:
+        ihme_merged_df = pd.merge(ihme_merged_df, df, on='Year', how='outer')
+
+    logger.info(f"Processed IHME metrics. Shape: {ihme_merged_df.shape}")
+    return ihme_merged_df
+
 def main():
     """
     Main function to extract and merge all health metrics.
@@ -242,41 +303,48 @@ def main():
 
     ncd_metrics = extract_ncd_risc_metrics()
     aihw_metrics = extract_aihw_metrics()
+    ihme_metrics = extract_ihme_metrics()
 
-    # Merge NCD and AIHW metrics
-    if ncd_metrics is not None and aihw_metrics is not None:
-        merged_health_df = pd.merge(ncd_metrics, aihw_metrics, on='Year', how='outer')
-    elif ncd_metrics is not None:
+    # Merge all metrics
+    merged_health_df = None
+    
+    # Start with NCD-RisC metrics if available
+    if ncd_metrics is not None:
         merged_health_df = ncd_metrics
-    elif aihw_metrics is not None:
-        merged_health_df = aihw_metrics
-    else:
-        logger.error("Failed to process any health metrics. Exiting.")
+        
+    # Add AIHW metrics if available
+    if aihw_metrics is not None:
+        if merged_health_df is not None:
+            merged_health_df = pd.merge(merged_health_df, aihw_metrics, on='Year', how='outer')
+        else:
+            merged_health_df = aihw_metrics
+            
+    # Add IHME metrics if available
+    if ihme_metrics is not None:
+        if merged_health_df is not None:
+            merged_health_df = pd.merge(merged_health_df, ihme_metrics, on='Year', how='outer')
+        else:
+            merged_health_df = ihme_metrics
+
+    if merged_health_df is None:
+        logger.error("No health metrics could be processed.")
         return
 
-    # Sort by year
-    merged_health_df = merged_health_df.sort_values('Year').reset_index(drop=True)
-
-    # Save the merged health metrics
-    output_path = config.HEALTH_METRICS_FILE
-    try:
-        merged_health_df.to_csv(output_path, index=False)
-        logger.info(f"Merged health metrics saved successfully to {output_path}")
-    except Exception as e:
-        logger.error(f"Failed to save merged health metrics: {e}")
-        return
-
-    # Log final summary
-    logger.info(f"Final health metrics dataset shape: {merged_health_df.shape}")
-    logger.info(f"Years covered: {merged_health_df['Year'].min()} to {merged_health_df['Year'].max()}")
-    logger.info(f"Columns: {', '.join(merged_health_df.columns)}")
-
-    # Log completeness
-    logger.info("--- Health Metrics Completeness ---")
+    # Sort by year and handle any missing values
+    merged_health_df = merged_health_df.sort_values('Year')
+    
+    # Save the merged dataset
+    output_file = config.PROCESSED_DATA_DIR / 'health_metrics_australia_combined.csv'
+    merged_health_df.to_csv(output_file, index=False)
+    logger.info(f"Saved combined health metrics to {output_file}")
+    logger.info(f"Final dataset shape: {merged_health_df.shape}")
+    
+    # Log available metrics
+    logger.info("Available metrics in final dataset:")
     for col in merged_health_df.columns:
         if col != 'Year':
-            completeness = merged_health_df[col].notna().mean() * 100
-            logger.info(f"{col}: {completeness:.1f}% complete")
+            non_null = merged_health_df[col].notna().sum()
+            logger.info(f"  {col}: {non_null} non-null values")
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main() 

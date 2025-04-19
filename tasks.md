@@ -1,125 +1,157 @@
-# Project Tasks (Derived from apply.md Review – 12 April 2025)
+# Project Tasks (Updated 1 June 2025 - Project Completion)
 
-This file tracks the specific tasks identified in the `apply.md` review received on 12 April 2025, focused on fixing minor test issues and refining visualisations for impact. It also includes subsequent fixes.
-
----
-
-**Status Update (12 April 2025):**
-All tasks derived from the `apply.md` review (received 12 April 2025) have been completed.
-
-- AIHW test failures have been resolved.
-- A dedicated analysis script (`src/run_analysis.py`) has been created.
-- Key visualisations (LA Trend, Juxtaposing Trends, Lagged Scatter, Correlation Heatmap) have been refined as per the review recommendations.
-- The project is ready for final review or further analysis steps.
+This file tracks project tasks, reflecting decisions made after the reviews on 12 April 2025 and 28 May 2025. All core tasks have been completed.
 
 ---
 
-## Task List (Based on apply.md Review - 12 April 2025)
+**Status Update (1 June 2025):**
 
-1. **[X] Fix AIHW Test Failures**
+- All core project tasks have been completed
+- Project is ready for portfolio demonstration
+- Interactive dashboard and documentation are complete
+- Presentation materials have been prepared
+- **Next:** Optional automation improvements can be considered
 
-   * **Files:** `tests/test_process_aihw_data.py`, `src/data_processing/process_aihw_data.py`
-   * **Action:** Addressed `test_process_aihw_excel` by ensuring the output CSV is always created (with headers if empty). Updated `test_process_sheet_table11` assertion to expect 'persons'.
-   * **Delegate To:** `debug` mode.
-   * **Status:** Completed.
-2. **[X] Create Dedicated Analysis Script**
+---
 
-   * **Files:** `src/run_analysis.py`
-   * **Action:** Created the script framework to load data, call visualisation functions, and apply specific annotations/overlays, separating analysis logic from `src/visualisation/main.py`.
+## Completed Phases
+
+### Phase 1/2: ETL & Data Quality Fixes (Completed)
+
+1. **[X] Fix AIHW Test Failures** (Completed 12 April 2025)
+2. **[X] Create Dedicated Analysis Script** (Completed 12 April 2025)
+3. **[X] Refine Key Visualisations** (Completed 12 April 2025)
+4. **[X] Fix Pydantic ValidationErrors in run_analysis.py** (Completed 12 April 2025)
+5. **[X] Fix NameError in scatter.py** (Completed 12 April 2025)
+6. **[C] Investigate and Fix Missing `BMI_AgeStandardised` Data** (Closed 18 April 2025 - Data Not Available in Source)
+7. **[X] Investigate and Add Missing `Population` Data** (Completed 18 April 2025)
+
+### Phase 3: Integrate IHME GBD Data (Completed)
+
+1. **[X] Integrate IHME Processing into ETL Runner** (Completed 28 May 2025)
+   * **Files:** `src/run_etl.py`, `src/data_processing/process_abs_ihme_data.py`
+   * **Action:** Modify `run_etl.py` to call the main function within `process_abs_ihme_data.py` at the appropriate stage (e.g., after downloads, before health metrics consolidation). Ensure it handles the case where the IHME zip file might be missing.
    * **Delegate To:** `code` mode.
-   * **Status:** Completed.
-3. **[X] Refine Key Visualisations**
-
-   * **Files:** `src/run_analysis.py`, `src/visualisation/time_series.py`, `src/visualisation/scatter.py`, `src/visualisation/correlation.py`
-   * **Action:** Implemented enhancements detailed in `apply.md` for the LA Trend (title, annotations, rolling average), Juxtaposing Trends (faceted plot), Lagged Scatter (titles, correlation stats annotation, selected lags), and Correlation Heatmap (subset variables, caption).
+2. **[X] Incorporate Processed IHME Data into Merge Logic** (Completed 28 May 2025)
+   * **Files:** `src/data_processing/health_outcome_metrics.py`
+   * **Action:** Added new `extract_ihme_metrics()` function to process GBD metrics. Updated main function to merge IHME data with NCD-RisC and AIHW metrics.
    * **Delegate To:** `code` mode.
-   * **Status:** Completed.
+3. **[X] Update Final Data Model (`AnalyticalRecord`)** (Completed 29 May 2025)
+   * **Files:** `src/data_processing/merge_health_dietary.py`
+   * **Action:** Added new optional fields to the `AnalyticalRecord` Pydantic model to accommodate IHME metrics (prevalence, incidence, death rates, and numbers for both dementia and CVD). Updated validation rules for non-negative fields.
+   * **Delegate To:** `code` mode.
+
+4. [X] **Update Documentation for IHME Integration** (Completed 30 May 2025)
+    * **Files:** `README.md`, `planning.md`
+    * **Action:** Update the documentation to accurately reflect that IHME data *is* used. Clarify the manual download step for the IHME zip file in `README.md`. Update the data source list and data integration notes in `planning.md`.
+    * **Delegate To:** `code` mode.
+
+### Phase 4: EDA & Modelling (Completed)
+
+* **Objective**: Model and analyze relationships using the final data asset.
+* **Status**:
+  * [X] Initial EDA completed with comprehensive summary statistics and visualisations
+  * [X] Detailed correlation and lag analyses completed
+  * [X] MLR completed with comprehensive results
+  * [X] GAMs implemented with cross-validation and model selection (Completed 30 May 2025)
+    * Added GAMConfig for configuration management
+    * Implemented cross-validation for hyperparameter selection
+    * Added functions for analyzing specific health outcomes
+    * Generated partial dependence plots for feature interpretation
+    * Saved comprehensive results to `reports/gam_analysis_summary.csv`
+  * [X] Time Series Models and Tree-Based Models (Completed 31 May 2025)
+    * Implemented enhanced ARIMA with auto-parameter selection
+    * Added Prophet model support for comparison
+    * Implemented Random Forest and XGBoost models
+    * Added feature importance analysis
+    * Generated comprehensive evaluation metrics
+    * Created visualisations for forecasts and feature importance
+* **Tasks**:
+  * [X] Complete remaining EDA tasks
+  * [X] Implement MLR and GAMs
+  * [X] Time Series Models, Tree-Based Models
+  * [X] Interpret results, document findings and limitations (Completed 31 May 2025)
+    * Created comprehensive findings document (`reports/findings_and_limitations.md`)
+    * Documented ecological fallacy considerations
+    * Analyzed confounding factors
+    * Discussed data source differences and limitations
+    * Provided recommendations for interpretation
+    * Suggested future research directions
+
+### Phase 5: Visualisation and Documentation (Completed)
+
+* **Objective**: Present findings effectively through an interactive dashboard.
+* **Status**: All tasks completed, project ready for portfolio demonstration
+* **Completed Tasks**:
+  * [X] Create interactive visualisations (Completed 31 May 2025)
+    * Created new module `src/visualisation/interactive.py` for Plotly-based visualizations
+    * Implemented interactive time series plots with zoom/pan
+    * Added correlation heatmaps with hover details
+    * Created scatter plots with trend lines
+    * Added feature importance and model comparison plots
+    * Implemented GAM partial dependence plots
+    * Created comprehensive HTML dashboard (`figures/dashboard.html`)
+    * Added unit tests in `tests/test_interactive_viz.py`
+    * Updated requirements.txt with plotly and related packages
+  * [X] Configure for Local Demonstration (Completed 1 June 2025)
+    * Updated dashboard creation script for local viewing
+    * Organized files in appropriate directory structure
+    * Added local setup documentation
+  * [X] Take Down Vercel Deployment (Completed 1 June 2025)
+    * Removed project from Vercel dashboard
+    * Updated documentation to remove deployment URLs
+    * Archived deployment configuration files
+    * Documented local setup for portfolio demonstration
+  * [X] Write final documentation (Completed 1 June 2025)
+    * Updated README with comprehensive project overview
+    * Added detailed findings summary
+    * Documented local development setup
+    * Created interactive dashboard user guide
+    * Added acknowledgments section
+  * [X] Create presentation materials (Completed 1 June 2025)
+    * Created comprehensive presentation in `reports/presentation.md`
+    * Included key findings and methodology
+    * Added local dashboard demo instructions
+    * Documented conclusions and future directions
+    * Prepared technical appendix
 
 ---
 
-## Ad-hoc Fixes (Post 12 April 2025 Review)
+## Optional Future Improvements
 
-1. **[X] Fix Pydantic ValidationErrors in run_analysis.py**
+### Phase 6: Automation Enhancements (Optional)
 
-   * **Date:** 12 April 2025
-   * **Files:** `src/run_analysis.py`
-   * **Action:** Corrected recurring type mismatches for the `output_dir` parameter passed to various Pydantic configuration classes (`TimeSeriesConfig`, `CorrelationConfig`, `ScatterConfig`). Ensured the `FIGURES_DIR` `Path` object is consistently converted to a string (`str(FIGURES_DIR)`) before instantiation in all relevant cases within the `main` function.
-   * **Delegate To:** `debug` mode (initial fixes), `code` mode (comprehensive fix).
-   * **Status:** Completed.
-2. **[X] Fix NameError in scatter.py**
+1. **[I] ABS Causes of Death Automation** (Investigated [Current Date])
+    * **Priority**: Low
+    * **Action**: Research if the ABS data cube can be downloaded programmatically.
+    * **Findings**: Investigation complete. Direct programmatic download via API/stable URL seems unlikely. Data is released as versioned Excel files. Automation would likely require manual URL updates in `src/download_data.py` per release cycle and Excel parsing, or potentially complex access via ABS TableBuilder/Microdata services. No code changes made.
+    * **Implementation**: If possible, add to `src/download_data.py`
+    * **Status**: Investigated - Automation difficult
+    * **Dependencies**: None
+    * **Effort**: Medium (for partial automation), High (for full automation if possible via other services)
 
-   * **Date:** 12 April 2025
-   * **Files:** `src/visualisation/scatter.py`
-   * **Action:** Resolved `NameError: name 'stats' is not defined` by adding the missing import statement `import scipy.stats as stats` to the file.
-   * **Delegate To:** `debug` mode.
-   * **Status:** Completed.
+2. **Dependency Management**
+    * **Priority**: Low
+    * **Action**: Create `requirements.lock` for exact version pinning
+    * **Implementation**: Use `pip freeze`
+    * **Status**: Not started
+    * **Dependencies**: None
+    * **Effort**: Low
 
----
+3. **CI/CD Pipeline**
+    * **Priority**: Low
+    * **Action**: Add GitHub Actions for automated testing
+    * **Implementation**: Create workflow files
+    * **Status**: Not started
+    * **Dependencies**: None
+    * **Effort**: Medium
 
-## Data Validation & Enhancement (Post-ETL Run - 18 April 2025)
+4. **Data Update Automation**
+    * **Priority**: Low
+    * **Action**: Create scripts for automated data updates
+    * **Implementation**: Add scheduling and validation
+    * **Status**: Not started
+    * **Dependencies**: ABS automation
+    * **Effort**: High
 
-1. **[C] Investigate and Fix Missing `BMI_AgeStandardised` Data**
-
-   * **Date:** 18 April 2025
-   * **Files:** `src/run_etl.py`, `src/data_processing/health_outcome_metrics.py`, `src/download_data.py`, `data/raw/NCD_RisC_Lancet_2024_BMI_age_standardised_Australia.csv` (verified existence)
-   * **Action:** Verified the raw BMI data file exists. Checked processing logic in `health_outcome_metrics.py`. Confirmed the source file (`NCD_RisC_Lancet_2024_BMI_age_standardised_Australia.csv`) provides BMI *category prevalence* (e.g., obesity), not mean age-standardised BMI. Reverted code changes attempting to extract mean BMI.
-   * **Delegate To:** `code` mode.
-   * **Status:** Closed - Data Not Available in Source.
-2. **[X] Investigate and Add Missing `Population` Data**
-
-   * **Date:** 18 April 2025
-   * **Files:** `planning.md`, `src/config.py`, `src/download_data.py`, `src/data_processing/process_abs_population.py`, `src/run_etl.py`, `tests/test_process_abs_population.py`
-   * **Action:** Identified ABS historical time series as the source. Updated download script. Created processing script (`process_abs_population.py`) to extract annual (December quarter) data from the correct sheet, handling metadata rows and date parsing. Integrated processing and merging into `run_etl.py`. Added unit tests.
-   * **Delegate To:** `code` mode.
-   * **Status:** Completed.
-   * **Note (18 April 2025):** Required follow-up fix to ensure `process_abs_population.py` saved output to `data/processed/` (using `config.ABS_POPULATION_PROCESSED_FILE`) and `merge_health_dietary.py` loaded it correctly.
-
----
-
-## Phase 3: EDA & Modelling (added 27 May 2025)
-
-1. [ ] **Develop EDA module/notebook**
-
-    * **Files:** `src/analysis/eda.py` 
-    * **Action:** Create framework for exploratory data analysis.
-2. [ ] **Perform Summary Statistics & Distribution Checks**
-
-    * **Files:** `src/analysis/eda.py` or `/notebooks/EDA.ipynb`
-    * **Action:** Calculate and visualise basic statistics (mean, median, sd, distributions) for key variables.
-3. [ ] **Conduct Correlation and Lag Analyses**
-
-    * **Files:** `src/analysis/eda.py` or `/notebooks/EDA.ipynb`
-    * **Action:** Generate correlation heatmaps (including lags) and pairwise scatter plots.
-4. [ ] **Implement Linear Regression Models**
-
-    * **Files:** `src/models/regression.py`, `tests/test_regression.py`
-    * **Action:** Develop functions for fitting and evaluating multiple linear regression models. Add unit tests.
-5. [ ] **Implement Generalised Additive Models (GAMs)**
-
-    * **Files:** `src/models/gam.py`, `tests/test_gam.py`
-    * **Action:** Develop functions for fitting and evaluating GAMs using `pygam` or `statsmodels`. Add unit tests.
-6. [ ] **(Optional) Implement Time-Series Models**
-
-    * **Files:** `src/models/time_series.py`, `tests/test_time_series.py`
-    * **Action:** Develop functions for time-series analysis (e.g., ARIMA, Prophet). Add unit tests.
-7. [ ] **Write Unit Tests for Analysis Helpers**
-
-    * **Files:** `tests/test_eda_helpers.py` (if applicable)
-    * **Action:** Add tests for any reusable helper functions created during EDA.
-8. [ ] **Document EDA & Modelling**
-
-    * **Files:** `/notebooks/Analysis_Narrative.ipynb` or `reports/Analysis_Summary.md`
-    * **Action:** Write a narrative report detailing the analysis process, findings, and limitations.
-9. [ ] **Update README.md**
-
-    * **Files:** `README.md`
-    * **Action:** Add instructions on how to run analysis/models and locate results/figures.
-
-## Phase 1: Data Acquisition Automation Investigation (added 27 May 2025)
-
-1. [ ] **Investigate ABS Causes of Death Automation**
-
-    * **Action:** Research if the ABS data cube can be downloaded programmatically (e.g., via API or stable URL). If possible, implement in `src/download_data.py`.
-2. [ ] **Investigate IHME GBD Data Automation**
-
-    * **Action:** Research if specific GBD results can be downloaded programmatically (e.g., via API or direct CSV links) instead of manual VizHub export. If possible, implement in `src/download_data.py`.
+Note: These improvements are optional and not critical for the project's core functionality or demonstration purposes.

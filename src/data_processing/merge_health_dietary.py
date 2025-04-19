@@ -41,6 +41,15 @@ class AnalyticalRecord(BaseModel):
     Dementia_Prevalence_Number: Optional[float] = Field(None)
     Dementia_Mortality_Rate_ASMR: Optional[float] = Field(None)
     CVD_Mortality_Rate_ASMR: Optional[float] = Field(None)
+    # IHME GBD metrics (from 1990)
+    Dementia_Prevalence_Rate_GBD: Optional[float] = Field(None, ge=0, description="Age-standardised dementia prevalence rate from IHME GBD")
+    Dementia_Incidence_Rate_GBD: Optional[float] = Field(None, ge=0, description="Age-standardised dementia incidence rate from IHME GBD")
+    Dementia_Death_Rate_GBD: Optional[float] = Field(None, ge=0, description="Age-standardised dementia death rate from IHME GBD")
+    Dementia_Prevalence_Number_GBD: Optional[float] = Field(None, ge=0, description="Total number of dementia cases from IHME GBD")
+    CVD_Prevalence_Rate_GBD: Optional[float] = Field(None, ge=0, description="Age-standardised CVD prevalence rate from IHME GBD")
+    CVD_Incidence_Rate_GBD: Optional[float] = Field(None, ge=0, description="Age-standardised CVD incidence rate from IHME GBD")
+    CVD_Death_Rate_GBD: Optional[float] = Field(None, ge=0, description="Age-standardised CVD death rate from IHME GBD")
+    CVD_Prevalence_Number_GBD: Optional[float] = Field(None, ge=0, description="Total number of CVD cases from IHME GBD")
     # Lagged LA intake (optional)
     LA_perc_kcal_lag5: Optional[float] = Field(None)
     LA_perc_kcal_lag10: Optional[float] = Field(None)
@@ -58,7 +67,11 @@ class AnalyticalRecord(BaseModel):
             'Obesity_Prevalence_AgeStandardised', 'Dementia_Prevalence_Number',
             'Dementia_Mortality_Rate_ASMR', 'CVD_Mortality_Rate_ASMR',
             'LA_perc_kcal_lag5', 'LA_perc_kcal_lag10', 'LA_perc_kcal_lag15', 'LA_perc_kcal_lag20',
-            'NonHDL_Cholesterol_AgeStandardised'
+            'NonHDL_Cholesterol_AgeStandardised',
+            # New IHME GBD fields
+            'Dementia_Prevalence_Rate_GBD', 'Dementia_Incidence_Rate_GBD', 'Dementia_Death_Rate_GBD',
+            'Dementia_Prevalence_Number_GBD', 'CVD_Prevalence_Rate_GBD', 'CVD_Incidence_Rate_GBD',
+            'CVD_Death_Rate_GBD', 'CVD_Prevalence_Number_GBD'
         ]
         if info.field_name in non_negative_fields and v is not None and not pd.isna(v):
             if v < 0:

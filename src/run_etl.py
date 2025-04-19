@@ -6,15 +6,18 @@ This script orchestrates the processing of all data files, including:
 - FAOSTAT Food Balance Sheets
 - NCD-RisC health datasets
 - Fire in a Bottle linoleic acid data
+- IHME GBD data
+- ABS Causes of Death data
 
 Usage:
-  python src/run_etl.py [--aihw] [--ncd] [--faostat] [--fire]
+  python src/run_etl.py [--aihw] [--ncd] [--faostat] [--fire] [--ihme]
   
   Options:
     --aihw     Process only AIHW data
     --ncd      Process only NCD-RisC data
     --faostat  Process only FAOSTAT data
     --fire     Process only Fire in a Bottle data
+    --ihme     Process only IHME GBD and ABS CoD data
     --no-download  Skip the download step (assume files exist)
     
   If no options are provided, all datasets will be processed.
@@ -51,6 +54,7 @@ from src.data_processing.health_outcome_metrics import main as health_outcome_me
 from src.data_processing.merge_health_dietary import main as merge_health_dietary_main
 from src import download_data
 from src.data_processing.process_abs_population import process_abs_population_data
+from src.data_processing.process_abs_ihme_data import process_abs_cod, process_ihme_gbd
 
 
 # Define paths
@@ -292,119 +296,90 @@ def process_semantic_validation():
         logger.error(f"Error during semantic validation: {e}")
         return False
 
+def process_ihme_and_abs_data():
+    """Process IHME GBD and ABS Causes of Death data."""
+    logger.info("=== Processing IHME GBD and ABS CoD data ===")
+    try:
+        # Process ABS Causes of Death data
+        process_abs_cod()
+        
+        # Process IHME GBD data
+        process_ihme_gbd()
+        
+        logger.info("IHME GBD and ABS CoD data processing completed successfully")
+    except Exception as e:
+        logger.error(f"Error processing IHME/ABS data: {e}")
+
 def parse_args():
     """Parse command line arguments."""
-    parser = argparse.ArgumentParser(description='Process various datasets.')
-    parser.add_argument('--aihw', action='store_true', help='Process only AIHW data')
-    parser.add_argument('--ncd', action='store_true', help='Process only NCD-RisC data')
-    parser.add_argument('--faostat', action='store_true', help='Process only FAOSTAT data')
-    parser.add_argument('--fire', action='store_true', help='Process only Fire in a Bottle data')
-    parser.add_argument('--force', action='store_true', help='Force processing even if output files exist')
-    parser.add_argument('--no-download', action='store_true', help='Skip the download step')
-    parser.add_argument('--population', action='store_true', help='Process ABS population data')
+    parser = argparse.ArgumentParser(description="Process health and dietary data files")
+    parser.add_argument("--aihw", action="store_true", help="Process only AIHW data")
+    parser.add_argument("--ncd", action="store_true", help="Process only NCD-RisC data")
+    parser.add_argument("--faostat", action="store_true", help="Process only FAOSTAT data")
+    parser.add_argument("--fire", action="store_true", help="Process only Fire in a Bottle data")
+    parser.add_argument("--ihme", action="store_true", help="Process only IHME GBD and ABS CoD data")
+    parser.add_argument("--no-download", action="store_true", help="Skip the download step")
     return parser.parse_args()
 
 def main():
-    """Main ETL function."""
+    """Main ETL process."""
     args = parse_args()
     
-    # Skip download if --no-download flag is set
+    # Determine which processes to run
+    run_all = not (args.aihw or args.ncd or args.faostat or args.fire or args.ihme)
+    
+    # Download data if needed
     if not args.no_download:
-        if not run_downloads():
+        success = run_downloads()
+        if not success:
             logger.error("Download process failed. Exiting.")
             sys.exit(1)
     
-    # Process each dataset based on flags
-    if args.aihw or not any([args.ncd, args.faostat, args.fire]):
-        process_aihw_excel_files()
-    
-    if args.ncd or not any([args.aihw, args.faostat, args.fire]):
-        process_ncd_risc_csvs()
-    
-    if args.faostat or not any([args.aihw, args.ncd, args.fire]):
-        process_faostat_data(force_processing=args.force)
-    
-    if args.fire or not any([args.aihw, args.ncd, args.faostat]):
-        process_fire_in_bottle_data()
+    try:
+        # Process AIHW data if specified or running all
+        if args.aihw or run_all:
+            process_aihw_excel_files()
         
-    # Always run semantic validation after Fire in a Bottle and FAOSTAT data are processed
-    if (args.fire or args.faostat) or not any([args.aihw, args.ncd]):
-        if not process_semantic_validation():
-            logger.error("Semantic validation failed.")
-            sys.exit(1)
-    
-    # --- Add Call to Process ABS Population Data ---
-    if args.population:
+        # Process NCD-RisC data if specified or running all
+        if args.ncd or run_all:
+            process_ncd_risc_csvs()
+        
+        # Process FAOSTAT data if specified or running all
+        if args.faostat or run_all:
+            process_faostat_data()
+        
+        # Process Fire in a Bottle data if specified or running all
+        if args.fire or run_all:
+            process_fire_in_bottle_data()
+            
+        # Process IHME and ABS data if specified or running all
+        if args.ihme or run_all:
+            process_ihme_and_abs_data()
+            
+        # Process ABS population data (always needed)
         process_abs_population()
-
-    logger.info("=== Calculating dietary metrics ===")
-    calculate_dietary_metrics_main()
-
-    logger.info("=== Calculating health outcome metrics ===")
-    health_outcome_metrics_main()
-
-    logger.info("=== Merging health and dietary datasets ===")
-    merge_health_dietary_main()
-
-    # --- Consolidate Health Metrics ---
-    # This section remains unchanged, but its output will be used in the final merge
-    if args.fire or args.faostat:
-        logger.info("=== Consolidating Health Metrics ===")
-
-    # --- Merge All Data Sources (Including Population) ---
-    if args.fire or args.faostat:
-        logger.info("=== Merging Dietary, Health, and Population Data ===")
-        try:
-            # Define paths for input files
-            dietary_metrics_file = str(PROCESSED_DATA_DIR / "dietary_metrics_australia_calculated.csv")
-            health_metrics_file = str(PROCESSED_DATA_DIR / "health_metrics_australia_combined.csv")
-            population_file = str(STAGING_DATA_DIR / "abs_population_processed.csv") # Correct path
-            output_file = str(PROCESSED_DATA_DIR / "analytical_data_australia_final.csv")
-
-            # Check if all required files exist
-            required_files = [dietary_metrics_file, health_metrics_file, population_file]
-            if not all(Path(f).exists() for f in required_files):
-                logger.error("One or more input files required for the final merge are missing.")
-                missing = [f for f in required_files if not Path(f).exists()]
-                logger.error(f"Missing files: {missing}")
-                # Decide how to handle missing files, e.g., sys.exit(1) or return
-                return
-
-            # Load the datasets
-            dietary_df = pd.read_csv(dietary_metrics_file)
-            health_df = pd.read_csv(health_metrics_file)
-            population_df = pd.read_csv(population_file)
-
-            logger.debug(f"Dietary shape: {dietary_df.shape}, Health shape: {health_df.shape}, Population shape: {population_df.shape}")
-
-            # Merge dietary and health data first
-            logger.info("Merging dietary and health data on 'Year'...")
-            merged_df = pd.merge(dietary_df, health_df, on='Year', how='outer')
-            logger.info(f"Shape after merging dietary and health: {merged_df.shape}")
-
-            # Merge population data
-            logger.info("Merging population data on 'Year'...")
-            final_df = pd.merge(merged_df, population_df, on='Year', how='left') # Use left merge
-            logger.info(f"Shape after merging population: {final_df.shape}")
-
-            # Sort by Year
-            final_df = final_df.sort_values(by='Year').reset_index(drop=True)
-
-            # Save the final dataset
-            final_df.to_csv(output_file, index=False)
-            logger.info(f"Successfully merged all data sources and saved to {output_file}")
-            logger.info(f"Final dataset columns: {final_df.columns.tolist()}")
-
-            # Final validation log
-            logger.info("Basic validation of final dataset:")
-            logger.info(f"Years range: {final_df['Year'].min()} - {final_df['Year'].max()}")
-            null_sum = final_df.isnull().sum()
-            logger.info(f"Missing values per column (showing > 0):\\n{null_sum[null_sum > 0]}")
-
-        except Exception as e:
-            logger.error(f"An error occurred during the final merge process: {e}", exc_info=True)
-
-    logger.info("ETL process completed successfully")
+        
+        # Run semantic validation if processing all or FAOSTAT
+        if run_all or args.faostat:
+            process_semantic_validation()
+            
+        # Calculate dietary metrics if processing all or FAOSTAT
+        if run_all or args.faostat:
+            calculate_dietary_metrics_main()
+            
+        # Process health outcome metrics if processing all or any health data
+        if run_all or args.aihw or args.ncd or args.ihme:
+            health_outcome_metrics_main()
+            
+        # Merge health and dietary data if processing all
+        if run_all:
+            merge_health_dietary_main()
+            
+        logger.info("ETL process completed successfully")
+        
+    except Exception as e:
+        logger.error(f"Error during ETL process: {e}")
+        sys.exit(1)
 
 if __name__ == "__main__":
     main() 

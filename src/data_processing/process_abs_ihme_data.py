@@ -4,7 +4,7 @@ This module extracts, cleans, and standardises health outcome metrics from:
 - ABS Causes of Death (Excel, manually downloaded)
 - IHME GBD (CSV, extracted automatically from a manually downloaded zip)
 
-All code and comments use Australian English.
+All code and comments use Australian English spelling.
 Follows project modularity, PEP8, and pydantic validation.
 
 Outputs:
@@ -16,11 +16,12 @@ Outputs:
 
 import pandas as pd
 from pathlib import Path
-from typing import Optional, List
-from pydantic import BaseModel, ValidationError
+from typing import Optional, List, Dict
+from pydantic import BaseModel, ValidationError, Field
 import logging
 import zipfile
 import shutil
+import numpy as np
 
 RAW_DIR = Path("data/raw")
 PROCESSED_DIR = Path("data/processed")
@@ -28,7 +29,7 @@ STAGING_DIR = Path("data/staging")
 IHME_ZIP = RAW_DIR / "IHME-GBD_2021_DATA-31d73d81-1.zip"
 IHME_EXTRACTED_DIR = STAGING_DIR / "ihme_gbd_extracted"
 
-ABS_FILE = RAW_DIR / "ABS_Causes_of_Death_Australia.xlsx"  # Update if filename differs
+ABS_FILE = RAW_DIR / "ABS_Causes_of_Death_Australia.xlsx"
 
 ABS_OUT = PROCESSED_DIR / "abs_cod_metrics.csv"
 IHME_DEMENTIA_OUT = PROCESSED_DIR / "gbd_dementia_metrics.csv"
@@ -38,35 +39,81 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 class HealthMetricRecord(BaseModel):
-    Year: int
+    """Pydantic model for health metric records."""
+    Year: int = Field(..., ge=1980, le=2025)
     Metric: str
-    Value: float
+    Value: float = Field(..., ge=0)
     Source: str
+    Age_Group: Optional[str] = None
+    Sex: Optional[str] = None
+    Measure: Optional[str] = None
+    Location: str = "Australia"
+
+def clean_column_name(col: str) -> str:
+    """Standardise column names to snake_case."""
+    return col.lower().replace(" ", "_").replace("-", "_").replace("/", "_").replace("(", "").replace(")", "")
 
 def process_abs_cod(abs_file: Path = ABS_FILE, output_file: Path = ABS_OUT) -> None:
     """Extract and clean ABS Causes of Death data for Dementia, IHD, Stroke.
-
-    Manual step: Ensure the Excel file is present in data/raw/.
+    
+    Processes the ABS Excel file to extract age-standardised mortality rates
+    for key conditions. Handles ICD code changes across years.
     """
     if not abs_file.exists():
         logger.warning(f"ABS file not found: {abs_file}. Please download and place it in data/raw/.")
         return
 
-    # Example: Read Excel, filter for Australia, select relevant ICD codes, aggregate by year
-    # This is a placeholder; update sheet names and columns as per actual file structure.
-    df = pd.read_excel(abs_file, sheet_name=None)
-    # TODO: Identify correct sheet(s) and columns for Dementia, IHD, Stroke
-    # Example: sheet = df['Data']
-    # Filter, clean, and standardise columns
-    # For demonstration, create a dummy DataFrame
-    records = [
-        HealthMetricRecord(Year=2000, Metric="Dementia_Mortality_Rate_ABS", Value=25.0, Source="ABS"),
-        HealthMetricRecord(Year=2001, Metric="IHD_Mortality_Rate_ABS", Value=120.0, Source="ABS"),
-    ]
-    out_df = pd.DataFrame([r.dict() for r in records])
-    output_file.parent.mkdir(parents=True, exist_ok=True)
-    out_df.to_csv(output_file, index=False)
-    logger.info(f"ABS metrics saved to {output_file}")
+    try:
+        # Read the Excel file - adjust sheet name based on actual file
+        df = pd.read_excel(abs_file, sheet_name="Mortality Rates")
+        
+        # Clean column names
+        df.columns = [clean_column_name(col) for col in df.columns]
+        
+        # Filter for relevant conditions and standardise
+        condition_mapping = {
+            "dementia": ["Dementia", "Alzheimer", "Senile dementia"],
+            "ihd": ["Ischaemic heart disease", "Coronary heart disease"],
+            "stroke": ["Cerebrovascular disease", "Stroke"]
+        }
+        
+        records = []
+        for year in df["year"].unique():
+            year_data = df[df["year"] == year]
+            
+            # Process each condition group
+            for condition, terms in condition_mapping.items():
+                # Filter rows containing any of the terms
+                condition_data = year_data[
+                    year_data["cause_of_death"].str.contains("|".join(terms), case=False, na=False)
+                ]
+                
+                if not condition_data.empty:
+                    # Get age-standardised rate
+                    rate = condition_data["age_standardised_rate"].mean()
+                    
+                    # Create standardised metric name
+                    metric_name = f"{condition.upper()}_Mortality_Rate_ABS"
+                    
+                    # Create record
+                    record = HealthMetricRecord(
+                        Year=year,
+                        Metric=metric_name,
+                        Value=rate,
+                        Source="ABS_COD",
+                        Measure="Mortality_Rate"
+                    )
+                    records.append(record)
+        
+        # Convert to DataFrame and save
+        out_df = pd.DataFrame([r.dict() for r in records])
+        output_file.parent.mkdir(parents=True, exist_ok=True)
+        out_df.to_csv(output_file, index=False)
+        logger.info(f"ABS metrics saved to {output_file}")
+        
+    except Exception as e:
+        logger.error(f"Error processing ABS CoD file: {e}")
+        raise
 
 def extract_ihme_zip(zip_path: Path = IHME_ZIP, extract_dir: Path = IHME_EXTRACTED_DIR) -> Optional[Path]:
     """Extract the IHME GBD zip file to the staging directory. Returns the extraction path or None if not found."""
@@ -94,59 +141,92 @@ def find_ihme_csvs(extract_dir: Path) -> dict:
             cvd_csv = csv_file
     return {"dementia": dementia_csv, "cvd": cvd_csv}
 
+def process_ihme_csv(csv_path: Path, condition: str) -> List[HealthMetricRecord]:
+    """Process a single IHME CSV file for a specific condition."""
+    df = pd.read_csv(csv_path)
+    
+    # Clean column names
+    df.columns = [clean_column_name(col) for col in df.columns]
+    
+    # Filter for Australia
+    df = df[df["location"].str.contains("Australia", case=False, na=False)]
+    
+    # Define metrics to extract
+    metrics = {
+        "prevalence": "Prevalence_Rate",
+        "incidence": "Incidence_Rate",
+        "deaths": "Death_Rate"
+    }
+    
+    records = []
+    for year in df["year"].unique():
+        year_data = df[df["year"] == year]
+        
+        for measure, metric_suffix in metrics.items():
+            # Filter for the measure
+            measure_data = year_data[year_data["measure"].str.contains(measure, case=False, na=False)]
+            
+            if not measure_data.empty:
+                # Get age-standardised rate
+                rate = measure_data["val"].mean()
+                
+                # Create standardised metric name
+                metric_name = f"{condition}_{metric_suffix}_GBD"
+                
+                # Create record
+                record = HealthMetricRecord(
+                    Year=year,
+                    Metric=metric_name,
+                    Value=rate,
+                    Source="IHME_GBD",
+                    Measure=measure.capitalize()
+                )
+                records.append(record)
+    
+    return records
+
 def process_ihme_gbd(
     zip_path: Path = IHME_ZIP,
     extract_dir: Path = IHME_EXTRACTED_DIR,
     dementia_out: Path = IHME_DEMENTIA_OUT,
     cvd_out: Path = IHME_CVD_OUT,
 ) -> None:
-    """Extract and clean IHME GBD CSVs for Dementia and CVD.
-
-    The IHME GBD zip file must be manually downloaded and placed in data/raw/.
-    This function will automatically extract and process the relevant CSVs.
-    """
+    """Extract and clean IHME GBD CSVs for Dementia and CVD."""
     extracted = extract_ihme_zip(zip_path, extract_dir)
     if extracted is None:
         return
 
-    csvs = find_ihme_csvs(extract_dir)
-    # Dementia
-    if not csvs["dementia"] or not csvs["dementia"].exists():
-        logger.warning("IHME Dementia CSV not found in extracted zip.")
-    else:
-        try:
-            df = pd.read_csv(csvs["dementia"])
-            # TODO: Filter for Australia, select relevant metrics, standardise columns
-            # For demonstration, create a dummy DataFrame
-            records = [
-                HealthMetricRecord(Year=2000, Metric="Dementia_Prevalence_Rate_GBD", Value=1.2, Source="IHME_GBD"),
-                HealthMetricRecord(Year=2001, Metric="Dementia_Death_Rate_GBD", Value=2.3, Source="IHME_GBD"),
-            ]
-            out_df = pd.DataFrame([r.dict() for r in records])
+    try:
+        csvs = find_ihme_csvs(extract_dir)
+        
+        # Process Dementia data
+        if csvs["dementia"] and csvs["dementia"].exists():
+            dementia_records = process_ihme_csv(csvs["dementia"], "Dementia")
+            dementia_df = pd.DataFrame([r.dict() for r in dementia_records])
             dementia_out.parent.mkdir(parents=True, exist_ok=True)
-            out_df.to_csv(dementia_out, index=False)
+            dementia_df.to_csv(dementia_out, index=False)
             logger.info(f"IHME Dementia metrics saved to {dementia_out}")
-        except Exception as e:
-            logger.error(f"Error processing IHME Dementia CSV: {e}")
-
-    # CVD
-    if not csvs["cvd"] or not csvs["cvd"].exists():
-        logger.warning("IHME CVD CSV not found in extracted zip.")
-    else:
-        try:
-            df = pd.read_csv(csvs["cvd"])
-            # TODO: Filter for Australia, select relevant metrics, standardise columns
-            # For demonstration, create a dummy DataFrame
-            records = [
-                HealthMetricRecord(Year=2000, Metric="CVD_Prevalence_Rate_GBD", Value=3.4, Source="IHME_GBD"),
-                HealthMetricRecord(Year=2001, Metric="CVD_Death_Rate_GBD", Value=4.5, Source="IHME_GBD"),
-            ]
-            out_df = pd.DataFrame([r.dict() for r in records])
+        else:
+            logger.warning("IHME Dementia CSV not found in extracted zip.")
+        
+        # Process CVD data
+        if csvs["cvd"] and csvs["cvd"].exists():
+            cvd_records = process_ihme_csv(csvs["cvd"], "CVD")
+            cvd_df = pd.DataFrame([r.dict() for r in cvd_records])
             cvd_out.parent.mkdir(parents=True, exist_ok=True)
-            out_df.to_csv(cvd_out, index=False)
+            cvd_df.to_csv(cvd_out, index=False)
             logger.info(f"IHME CVD metrics saved to {cvd_out}")
-        except Exception as e:
-            logger.error(f"Error processing IHME CVD CSV: {e}")
+        else:
+            logger.warning("IHME CVD CSV not found in extracted zip.")
+            
+    except Exception as e:
+        logger.error(f"Error processing IHME GBD data: {e}")
+        raise
+    finally:
+        # Clean up extracted files
+        if extract_dir.exists():
+            shutil.rmtree(extract_dir)
+            logger.info("Cleaned up extracted IHME files")
 
 if __name__ == "__main__":
     process_abs_cod()
