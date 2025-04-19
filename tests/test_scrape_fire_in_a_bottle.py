@@ -134,26 +134,6 @@ def test_unrecoverable_malformed_table():
     df = find_and_parse_pre_blocks(soup)
     assert df is None
 
-    df = find_and_parse_pre_blocks(soup)
-    assert df is not None
-    assert len(df) == 1
-    assert df['food_name'].iloc[0] == 'Sunflower Oil'
-
-    assert len(df) == 2
-    # Should pad/truncate as needed, and not crash
-    assert df['food_name'].iloc[0] == 'Sunflower Oil'
-    assert df['food_name'].iloc[1] == 'Corn Oil'
-
-    df = find_and_parse_pre_blocks(soup)
-    assert df is not None
-    assert len(df) == 2
-    assert set(df.columns) >= {'food_name', 'la_cal', 'cal', 'percent'}
-
-    df = find_and_parse_pre_blocks(soup)
-    assert df is not None
-    assert len(df) == 1
-    assert df['food_name'].iloc[0] == 'Sunflower Oil'
-
 
 def test_fallback_to_div_tag():
     """Test fallback to <div> tag with table-like content (Australian English)."""

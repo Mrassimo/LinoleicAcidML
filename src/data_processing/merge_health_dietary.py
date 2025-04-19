@@ -209,12 +209,32 @@ def main():
         # Create an empty DataFrame with just Year if loading fails
         health_df = pd.DataFrame({'Year': dietary_df['Year'].unique()})
 
+    # --- Load Population Data ---
+    logger.info("Loading processed population data...")
+    population_data_path = config.ABS_POPULATION_PROCESSED_FILE
+    if not population_data_path.exists():
+        logger.warning(f"Processed population data file not found: {population_data_path}. Population column will be empty.")
+        # Create an empty DataFrame with 'Year' to avoid merge errors later
+        population_df = pd.DataFrame({'Year': [], 'Population': []})
+    else:
+        try:
+            population_df = pd.read_csv(population_data_path)
+            # Ensure columns are correct ('Year', 'Population')
+            if 'Year' not in population_df.columns or 'Population' not in population_df.columns:
+                 raise ValueError("Population data CSV missing required 'Year' or 'Population' columns.")
+            population_df = population_df[['Year', 'Population']] # Keep only relevant columns
+            logger.info(f"Loaded population data: {population_df.shape[0]} rows")
+        except Exception as e:
+            logger.error(f"Error loading or processing population data file {population_data_path}: {e}")
+            population_df = pd.DataFrame({'Year': [], 'Population': []}) # Empty DF on error
+
     # Merge dietary metrics (with lags) and health outcomes
     logger.info("Merging dietary and health data...")
     # Ensure 'Year' is integer type for merging
     try:
         dietary_df['Year'] = dietary_df['Year'].astype(int)
         health_df['Year'] = health_df['Year'].astype(int)
+        population_df['Year'] = population_df['Year'].astype(int) # Also convert population year
     except Exception as e:
         logger.error(f"Could not convert Year columns to integer for merging: {e}")
         logger.info(f"Dietary Year Dtype: {dietary_df['Year'].dtype}")
@@ -222,7 +242,12 @@ def main():
         return
 
     merged_df = pd.merge(dietary_df, health_df, on='Year', how='left')
-    logger.info(f"Merged data shape: {merged_df.shape}")
+    logger.info(f"Merged data shape after health data: {merged_df.shape}")
+
+    # --- Merge Population Data ---
+    logger.info("Merging population data...")
+    merged_df = pd.merge(merged_df, population_df, on='Year', how='left')
+    logger.info(f"Merged data shape after population data: {merged_df.shape}")
 
     # --- Data Type Conversion and NaN Handling BEFORE Validation ---
     # Convert all potentially numeric columns to float, coercing errors
@@ -248,51 +273,58 @@ def main():
         except Exception as e:
             invalid_count += 1
             year = record_dict.get('Year', f'Unknown_Row_{i+1}')
-            validation_errors[year] = str(e)
-            if invalid_count <= 20:
-                logger.warning(f"Invalid record for year {year}: {e}")
-            elif invalid_count == 21:
-                logger.warning("Further validation errors will be suppressed in log...")
+            error_details = {
+                "Year": year,
+                "ErrorType": type(e).__name__,
+                "ErrorMessage": str(e),
+                "InvalidFields": getattr(e, 'errors', lambda: "N/A")() if hasattr(e, 'errors') else str(e)
+            }
+            # Log more detailed field errors if available (from pydantic.ValidationError)
+            if hasattr(e, 'errors'):
+                 field_errors = {err['loc'][0]: err['msg'] for err in e.errors() if 'loc' in err and err['loc']}
+                 error_details["FieldErrors"] = field_errors
+                 logger.error(f"Validation error for Year {year}: {field_errors}")
+            else:
+                 logger.error(f"Validation error for Year {year}: {type(e).__name__} - {str(e)}")
 
-    logger.info(f"Validation completed. Total records: {len(merged_df)}, Invalid records: {invalid_count}")
+            # Store error details for reporting
+            if year not in validation_errors:
+                validation_errors[year] = []
+            validation_errors[year].append(error_details)
 
-    # Save detailed validation errors if any
+    logger.info(f"Validation completed. Total records: {len(merged_df)}, Valid records: {len(validated_records)}, Invalid records: {invalid_count}")
+
+    # --- Save Validated Data and Errors ---
+    if validated_records:
+        final_df = pd.DataFrame(validated_records)
+        # Re-establish desired column order based on the Pydantic model fields
+        final_df = final_df[list(AnalyticalRecord.model_fields.keys())]
+
+        # --- Final Dataset Completeness Check ---
+        logger.info("--- Final Dataset Completeness ---")
+        total_rows = len(final_df)
+        for col in final_df.columns:
+            if col != 'Year': # Exclude Year column from completeness check
+                completeness = final_df[col].notna().sum()
+                completeness_perc = (completeness / total_rows) * 100
+                logger.info(f"{col}: {completeness_perc:.1f}% complete ({completeness}/{total_rows})")
+
+        # Save the final validated DataFrame
+        final_output_path = config.ANALYTICAL_DATA_FINAL_FILE
+        final_df.to_csv(final_output_path, index=False)
+        logger.info(f"Final analytical dataset saved successfully to {final_output_path}")
+        logger.info(f"Final dataset covers years {final_df['Year'].min()} to {final_df['Year'].max()}")
+        logger.info(f"Total validated records: {len(final_df)}")
+
+    else:
+        logger.warning("No valid records found after validation. Final dataset not saved.")
+
+    # Save validation errors if any occurred
     if validation_errors:
         error_df = pd.DataFrame(list(validation_errors.items()), columns=['Year_or_Row', 'Error'])
         error_path = config.ANALYTICAL_DATA_VALIDATION_ERRORS_FILE
         error_df.to_csv(error_path, index=False)
         logger.warning(f"Detailed validation errors saved to {error_path}")
-
-    if not validated_records:
-        logger.error("No valid records found after validation. Cannot proceed.")
-        return
-
-    # Convert validated records back to DataFrame
-    final_df = pd.DataFrame(validated_records)
-
-    # Sort by year
-    final_df = final_df.sort_values('Year').reset_index(drop=True)
-
-    # Save final dataset
-    output_path = config.ANALYTICAL_DATA_FINAL_FILE
-    try:
-        final_df.to_csv(output_path, index=False)
-        logger.info(f"Final analytical dataset saved successfully to {output_path}")
-    except Exception as e:
-        logger.error(f"Failed to save final dataset: {e}")
-        return
-
-    # Log final statistics
-    logger.info(f"Final dataset covers years {final_df['Year'].min()} to {final_df['Year'].max()}")
-    logger.info(f"Total validated records: {len(final_df)}")
-
-    # Log completeness of key variables in the final validated dataset
-    logger.info("--- Final Dataset Completeness ---")
-    for col in final_df.columns:
-        if col != 'Year':
-            null_count = final_df[col].isnull().sum() + (final_df[col] == None).sum()
-            pct_complete = (1 - null_count / len(final_df)) * 100
-            logger.info(f"{col}: {pct_complete:.1f}% complete ({len(final_df) - null_count}/{len(final_df)})")
 
 if __name__ == "__main__":
     main() 

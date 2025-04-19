@@ -45,6 +45,13 @@ class FAOStatRecord(BaseModel):
             raise ValueError('Value must be non-negative')
         return v
 
+    @field_validator('year')
+    def year_must_be_valid(cls, v):
+        if not (1961 <= v <= 2022):
+            raise ValueError('Year must be between 1961 and 2022 inclusive')
+        return v
+        return v
+
 def identify_year_columns(df: pd.DataFrame) -> List[str]:
     """Identify year columns in the dataset."""
     year_pattern = r'^Y\d{4}$'

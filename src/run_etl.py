@@ -34,8 +34,8 @@ import importlib.util
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
+    level=logging.DEBUG,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
 
@@ -48,11 +48,9 @@ from src.data_processing.validation_utils import get_la_content_for_item
 from src.data_processing.update_validation import create_validation_data
 from src.data_processing.calculate_dietary_metrics import calculate_dietary_metrics as calculate_dietary_metrics_main
 from src.data_processing.health_outcome_metrics import main as health_outcome_metrics_main
-from .data_processing.merge_health_dietary import main as merge_health_dietary_main
-try:
-    from . import download_data
-except ImportError:
-    download_data = None
+from src.data_processing.merge_health_dietary import main as merge_health_dietary_main
+from src import download_data
+from src.data_processing.process_abs_population import process_abs_population_data
 
 
 # Define paths
@@ -236,6 +234,17 @@ def process_fire_in_bottle_data():
     except Exception as e:
         logger.error(f"Error processing Fire in a Bottle data: {e}")
 
+def process_abs_population():
+    """Process the ABS population data.
+    Note: This relies on the data being downloaded first.
+    """
+    logger.info("=== Processing ABS Population Data ===")
+    try:
+        process_abs_population_data() # Call the function from the dedicated module
+        logger.info("ABS population data processing completed.")
+    except Exception as e:
+        logger.error(f"Error processing ABS population data: {e}", exc_info=True)
+
 def process_semantic_validation():
     """Process semantic validation between FAOSTAT and LA content data."""
     logger.info("=== Processing Semantic Validation ===")
@@ -292,6 +301,7 @@ def parse_args():
     parser.add_argument('--fire', action='store_true', help='Process only Fire in a Bottle data')
     parser.add_argument('--force', action='store_true', help='Force processing even if output files exist')
     parser.add_argument('--no-download', action='store_true', help='Skip the download step')
+    parser.add_argument('--population', action='store_true', help='Process ABS population data')
     return parser.parse_args()
 
 def main():
@@ -323,6 +333,10 @@ def main():
             logger.error("Semantic validation failed.")
             sys.exit(1)
     
+    # --- Add Call to Process ABS Population Data ---
+    if args.population:
+        process_abs_population()
+
     logger.info("=== Calculating dietary metrics ===")
     calculate_dietary_metrics_main()
 
@@ -331,6 +345,64 @@ def main():
 
     logger.info("=== Merging health and dietary datasets ===")
     merge_health_dietary_main()
+
+    # --- Consolidate Health Metrics ---
+    # This section remains unchanged, but its output will be used in the final merge
+    if args.fire or args.faostat:
+        logger.info("=== Consolidating Health Metrics ===")
+
+    # --- Merge All Data Sources (Including Population) ---
+    if args.fire or args.faostat:
+        logger.info("=== Merging Dietary, Health, and Population Data ===")
+        try:
+            # Define paths for input files
+            dietary_metrics_file = str(PROCESSED_DATA_DIR / "dietary_metrics_australia_calculated.csv")
+            health_metrics_file = str(PROCESSED_DATA_DIR / "health_metrics_australia_combined.csv")
+            population_file = str(STAGING_DATA_DIR / "abs_population_processed.csv") # Correct path
+            output_file = str(PROCESSED_DATA_DIR / "analytical_data_australia_final.csv")
+
+            # Check if all required files exist
+            required_files = [dietary_metrics_file, health_metrics_file, population_file]
+            if not all(Path(f).exists() for f in required_files):
+                logger.error("One or more input files required for the final merge are missing.")
+                missing = [f for f in required_files if not Path(f).exists()]
+                logger.error(f"Missing files: {missing}")
+                # Decide how to handle missing files, e.g., sys.exit(1) or return
+                return
+
+            # Load the datasets
+            dietary_df = pd.read_csv(dietary_metrics_file)
+            health_df = pd.read_csv(health_metrics_file)
+            population_df = pd.read_csv(population_file)
+
+            logger.debug(f"Dietary shape: {dietary_df.shape}, Health shape: {health_df.shape}, Population shape: {population_df.shape}")
+
+            # Merge dietary and health data first
+            logger.info("Merging dietary and health data on 'Year'...")
+            merged_df = pd.merge(dietary_df, health_df, on='Year', how='outer')
+            logger.info(f"Shape after merging dietary and health: {merged_df.shape}")
+
+            # Merge population data
+            logger.info("Merging population data on 'Year'...")
+            final_df = pd.merge(merged_df, population_df, on='Year', how='left') # Use left merge
+            logger.info(f"Shape after merging population: {final_df.shape}")
+
+            # Sort by Year
+            final_df = final_df.sort_values(by='Year').reset_index(drop=True)
+
+            # Save the final dataset
+            final_df.to_csv(output_file, index=False)
+            logger.info(f"Successfully merged all data sources and saved to {output_file}")
+            logger.info(f"Final dataset columns: {final_df.columns.tolist()}")
+
+            # Final validation log
+            logger.info("Basic validation of final dataset:")
+            logger.info(f"Years range: {final_df['Year'].min()} - {final_df['Year'].max()}")
+            null_sum = final_df.isnull().sum()
+            logger.info(f"Missing values per column (showing > 0):\\n{null_sum[null_sum > 0]}")
+
+        except Exception as e:
+            logger.error(f"An error occurred during the final merge process: {e}", exc_info=True)
 
     logger.info("ETL process completed successfully")
 

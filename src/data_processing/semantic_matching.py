@@ -1,3 +1,4 @@
+import logging
 """
 Manual helper script for FAO/LA mapping (not part of ETL pipeline).
 
@@ -43,7 +44,9 @@ def preprocess_item_name(item_name: str) -> str:
     prefixes_to_remove = ['raw ', 'processed ', 'prepared ']
     for prefix in prefixes_to_remove:
         if item_name.startswith(prefix):
+            logging.info(f"Removed prefix '{prefix}' from item name. Result: '{item_name[len(prefix):]}'")
             item_name = item_name[len(prefix):]
+            break
     
     return item_name
 
@@ -54,12 +57,28 @@ def find_best_matches(
     similarity_threshold: float = 0.5
 ) -> List[Dict]:
     """
-    Find best matches between FAOSTAT items and LA content items using semantic similarity
-    """
-    # Preprocess item names
-    fao_items_clean = [preprocess_item_name(item) for item in fao_items]
-    la_items_clean = [preprocess_item_name(item) for item in la_items]
+    Find best matches between FAOSTAT items and LA content items using semantic similarity.
+    Returns an empty list if either input is empty, as per Australian English conventions.
     
+    Args:
+        fao_items: List of FAOSTAT food items
+        la_items: List of LA content food items
+        similarity_matrix: Numpy array of similarity scores between items
+        similarity_threshold: Minimum similarity score to include a match (default: 0.5)
+        
+    Returns:
+        List of dictionaries containing matches above the threshold
+    """
+    # Early return for empty inputs
+    if not fao_items or not la_items:
+        logger.warning("Empty input list detected in find_best_matches. Returning empty list.")
+        return []
+
+    # Check if similarity matrix is empty or has wrong dimensions
+    if similarity_matrix.size == 0 or similarity_matrix.shape != (len(fao_items), len(la_items)):
+        logger.warning("Invalid similarity matrix dimensions. Returning empty list.")
+        return []
+
     # Find best matches
     matches = []
     for i, fao_item in enumerate(fao_items):
@@ -79,7 +98,8 @@ def find_best_matches(
                 validated_match = ItemMatch(**match)
                 matches.append(validated_match.dict())
             except Exception as e:
-                logger.warning(f"Invalid match: {match}. Error: {e}")
+                logger.error(f"Error validating match for {fao_item}: {e}")
+                continue
     
     return matches
 

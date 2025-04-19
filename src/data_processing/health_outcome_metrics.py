@@ -110,11 +110,14 @@ def extract_ncd_risc_metrics() -> Optional[pd.DataFrame]:
             columns='sex',
             values='prevalence_of_bmi>=30_kg_m²_obesity_'
         ).reset_index()
+        
+        # Use original structure
         if 'Men' in bmi_pivot.columns and 'Women' in bmi_pivot.columns:
             bmi_pivot['Obesity_Prevalence_AgeStandardised'] = bmi_pivot[['Men', 'Women']].mean(axis=1) * 100 # Convert to percentage
-            metrics_list.append(bmi_pivot[['year', 'Obesity_Prevalence_AgeStandardised']].rename(columns={'year': 'Year'}))
+            # Append only the relevant columns
+            metrics_list.append(bmi_pivot[['year', 'Obesity_Prevalence_AgeStandardised']].rename(columns={'year': 'Year'})) 
         else:
-            logger.warning("Could not find 'Men' and 'Women' columns in BMI data for averaging.")
+            logger.warning("Could not find 'Men' and 'Women' columns in BMI obesity prevalence data for averaging.")
 
     # Cholesterol
     if cholesterol_df is not None:

@@ -58,12 +58,17 @@ This project investigates the relationship between seed oil intake (focusing on 
   * URL: [https://ncdrisc.org/downloads/chol/individual-countries/Australia.csv](https://ncdrisc.org/downloads/chol/individual-countries/Australia.csv)
 * **Adult BMI / Obesity Prevalence:** NCD Risk Factor Collaboration (1990-2022) - Modelled
   * URL: [https://ncdrisc.org/downloads/bmi-2024/adult/by_country/NCD_RisC_Lancet_2024_BMI_age_standardised_Australia.csv](https://ncdrisc.org/downloads/bmi-2024/adult/by_country/NCD_RisC_Lancet_2024_BMI_age_standardised_Australia.csv)
+  * **Note:** Integration of `BMI_AgeStandardised` column needs verification/fixing.
 * **Dementia & CVD Mortality:** Australian Bureau of Statistics (ABS) Causes of Death (Approx. 1980-Present) - Official Statistics
   * **Action:** Download main data cube from ABS website.
   * URL: [https://www.abs.gov.au/statistics/health/causes-death/causes-death-australia](https://www.abs.gov.au/statistics/health/causes-death/causes-death-australia) (Navigate to latest release -> Data Download)
 * **Dementia & CVD Prevalence/Incidence:** Institute for Health Metrics and Evaluation (IHME) Global Burden of Disease (GBD) (1990-Present) - Modelled Estimates
   * **Action:** Use GBD Results Tool to select Australia, specific causes, relevant measures (Prevalence/Incidence Rates/Numbers), age-standardized, 1990-latest. Download CSVs.
   * URL: [https://vizhub.healthdata.org/gbd-results/](https://vizhub.healthdata.org/gbd-results/)
+* **Population Data:** Australian Bureau of Statistics (ABS) - Official Statistics
+  * **Source:** ABS 'National, state and territory population' series.
+  * **Action:** Download/acquire latest data file (e.g., CSV or Excel). Integrate into ETL pipeline to provide annual population figures. Add processing script `src/data_processing/process_abs_population.py`.
+  * **URL:** [https://www.abs.gov.au/statistics/people/population/national-state-and-territory-population](https://www.abs.gov.au/statistics/people/population/national-state-and-territory-population) (Navigate to latest release -> Data Download)
 
 ### Dietary Data (Unchanged)
 

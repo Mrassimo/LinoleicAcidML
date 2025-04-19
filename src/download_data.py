@@ -74,6 +74,11 @@ FILES_TO_DOWNLOAD = [
         "type": "excel"
     },
     {
+        "url": config.ABS_POPULATION_URL,
+        "filename": config.ABS_POPULATION_FILENAME,
+        "type": "excel"
+    },
+    {
         "url": config.FAOSTAT_FBS_URL,
         "filename": config.FAOSTAT_FBS_FILENAME,
         "type": "zip",

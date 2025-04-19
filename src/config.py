@@ -7,11 +7,12 @@ Use Australian English for all comments and variable names.
 from pathlib import Path
 
 # === Directory Paths ===
-RAW_DATA_DIR = Path("data/raw")
-PROCESSED_DATA_DIR = Path("data/processed")
+PROJECT_ROOT = Path(__file__).parent.parent
+DATA_DIR = PROJECT_ROOT / "data"
+RAW_DATA_DIR = DATA_DIR / "raw"
+PROCESSED_DATA_DIR = DATA_DIR / "processed"
 STAGING_DATA_DIR = Path("data/staging")
-DATA_DIR = Path("data")
-FIGURES_DIR = Path("figures")
+FIGURES_DIR = PROJECT_ROOT / "figures"
 REPORTS_DIR = Path("reports")
 
 # === Download URLs and Filenames ===
@@ -56,6 +57,7 @@ ANALYTICAL_DATA_FINAL_FILE = PROCESSED_DATA_DIR / "analytical_data_australia_fin
 ANALYTICAL_DATA_VALIDATION_ERRORS_FILE = PROCESSED_DATA_DIR / "analytical_data_validation_errors.csv"
 FAO_LA_MAPPING_SEMANTIC_MATCHES_FILE = PROCESSED_DATA_DIR / "fao_la_mapping_semantic_matches.csv"
 LA_CONTENT_FIREINABOTTLE_PROCESSED_FILE = PROCESSED_DATA_DIR / "la_content_fireinabottle_processed.csv"
+ABS_POPULATION_PROCESSED_FILE = PROCESSED_DATA_DIR / "abs_population_australia_processed.csv"
 
 # === Model Names ===
 SENTENCE_TRANSFORMER_MODEL = "all-MiniLM-L6-v2"
@@ -64,4 +66,9 @@ SENTENCE_TRANSFORMER_MODEL = "all-MiniLM-L6-v2"
 # ABS Causes of Death (Australia) 2023 Excel file
 ABS_CAUSES_OF_DEATH_URL = "https://www.abs.gov.au/statistics/health/causes-death/causes-death-australia/2023/2023_01%20Underlying%20causes%20of%20death%20%28Australia%29.xlsx"
 ABS_CAUSES_OF_DEATH_FILENAME = "2023_01 Underlying causes of death (Australia).xlsx"
+
+# ABS National, state and territory population
+ABS_POPULATION_URL = "https://www.abs.gov.au/statistics/people/population/national-state-and-territory-population/sep-2024/310104.xlsx"
+ABS_POPULATION_FILENAME = "ABS_National_state_territory_population_latest.xlsx"
+
 # Add any additional configuration parameters here as needed.

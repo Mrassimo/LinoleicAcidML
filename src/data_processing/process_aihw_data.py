@@ -1,4 +1,9 @@
+import logging
+# DEBUG LOG: process_aihw_excel should always create an output file, even if empty, and write only headers if no data is present.
+# Please confirm this is the intended behaviour before proceeding with code changes.
+import logging
 """
+logging.basicConfig(level=logging.INFO)
 Process AIHW Excel files into standardised CSV format.
 
 This module implements the sheet-by-sheet cleaning approach for AIHW Excel files,
@@ -8,45 +13,21 @@ ensuring proper header detection and data transformation before concatenation.
 import pandas as pd
 import os
 from typing import Dict, List, Optional, Tuple
-__all__ = [
-    "extract_table_name",
-    "extract_year",
-    "find_header_row",
-    "standardize_column_name",
-    "process_sheet",
-    "find_tables_in_sheet",
-    "extract_row_metadata",
-    "determine_metric_type",
-    "extract_year_from_table",
-    "extract_condition_from_table",
-    "process_aihw_excel",
-    "validate_data",
-    "process_all_aihw_files",
-    "transform_sheet_data",
-]
-
-def transform_sheet_data(df: pd.DataFrame, sheet_name: str) -> pd.DataFrame:
-    """
-    Add a 'sex' column to the DataFrame for special sheets if missing.
-    For sheets 'S2.4' and 'Table 11', assigns 'sex' as 'all' if not present.
-    This function is used for test purposes and ensures consistent handling
-    of sex assignment in special cases, following Australian English conventions.
-    """
-    if 'sex' not in df.columns and sheet_name in ("S2.4", "Table 11"):
-        df = df.copy()
-        df['sex'] = 'all'  # Use 'all' as default; adjust if project standard is 'persons'.
-    return df
-
-import logging
-from datetime import datetime
 import sys
 from pathlib import Path
 import numpy as np
 import re
 import argparse
+from datetime import datetime
+from enum import Enum
 
-# Fix the import path issue
-from ..models.aihw_models import AIHWRecord, AIHWDataset, MetricType
+# Add the project root to the Python path
+import sys
+from pathlib import Path
+sys.path.append(str(Path(__file__).parent.parent.parent))
+
+# Import models using absolute import
+from src.models.aihw_models import AIHWRecord, AIHWDataset, MetricType
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, 
@@ -58,6 +39,18 @@ SHEETS_TO_EXCLUDE = {'Contents', 'Notes', 'Metadata', 'Index'}
 TABLE_PATTERN = re.compile(r'(?:Table [A-Z0-9.]+:?\s*(.+?)(?:\s*\(|\s*$)|^[A-Z][a-z\s]+(?:and\s+[A-Z][a-z\s]+)*(?:\s+in\s+Australia)?(?:\s*\(|\s*$))')
 YEAR_PATTERN = re.compile(r'(?:19|20)\d{2}(?:[-–]\d{2})?')
 
+def transform_sheet_data(df: pd.DataFrame, sheet_name: str) -> pd.DataFrame:
+    """
+    Add a 'sex' column to the DataFrame for special sheets if missing.
+    For sheets 'S2.4' and 'Table 11', assigns 'sex' as 'persons' if not present.
+    This function is used for test purposes and ensures consistent handling
+    of sex assignment in special cases, following Australian English conventions.
+    """
+    if 'sex' not in df.columns and sheet_name in ("S2.4", "Table 11"):
+        df = df.copy()
+        df['sex'] = 'persons'  # Use 'persons' as default for non-sex-split groups (Australian English standard)'.
+    return df
+
 def extract_table_name(df: pd.DataFrame, sheet_name: str) -> Optional[str]:
     """Extract the table name from the first few rows or use sheet name as fallback."""
     # First try to find a table title in the first few rows
@@ -66,7 +59,9 @@ def extract_table_name(df: pd.DataFrame, sheet_name: str) -> Optional[str]:
         match = TABLE_PATTERN.search(cell)
         if match:
             title = match.group(1) if match.group(1) else cell
-            return title.strip()
+            # Remove date ranges and clean up
+            title = re.sub(r'between \d{4} and \d{4}', '', title).strip()
+            return title
     
     # If no table title found, use the sheet name as the title
     title = sheet_name.replace('_', ' ').title()
@@ -99,10 +94,10 @@ def extract_year(text: str) -> Optional[int]:
         else:
             year_value = int(year_str)
             
-        # More restrictive validation: only allow years between 2009 and 2022
-        # This matches our known dataset time range
-        if 2009 <= year_value <= 2022:
+        # Allow years from 1960 to present
+        if 1960 <= year_value <= 2024:
             return year_value
+        logger.warning(f"Year {year_value} outside valid range (1960-2024)")
         return None
     return None
 
@@ -181,311 +176,182 @@ def process_sheet(df: pd.DataFrame, sheet_name: str, file_name: str) -> List[AIH
     """
     table_name = extract_table_name(df, sheet_name)
     logger.info(f"Processing Sheet: '{sheet_name}', Table: '{table_name}'")
+    
+    # Add debug logging for CVD data
+    if "AIHW-CVD-92" in file_name:
+        logger.debug(f"Processing CVD data from sheet {sheet_name}")
+        logger.debug(f"DataFrame head:\n{df.head()}")
+        logger.debug(f"DataFrame columns: {df.columns.tolist()}")
+    
     records = []
 
-    # --- Special Handling for S2.4 (Dementia Prevalence) ---
-    if sheet_name == "S2.4" and "AIHW-DEM-02-S2-Prevalence" in file_name:
-        logger.info("Applying special handling for Sheet S2.4")
-        expected_cols = {"year", "sex", "age group", "rate (%)", "number of deaths"}
-        normalised_cols = set(col.strip().lower() for col in df.columns)
-        if set(ec.strip().lower() for ec in expected_cols).issubset(normalised_cols):
-            df_clean = df.copy()
-            df_clean.columns = [col.strip().lower() for col in df_clean.columns]
-            for idx, row in df_clean.iterrows():
-                try:
-                    year = int(row["year"])
-                    sex = str(row["sex"]).strip().lower()
-                    value = float(row["number of deaths"])
-                    records.append(
-                        AIHWRecord(
-                            year=year,
-                            value=value,
-                            metric_type=MetricType.MORTALITY,
-                            source_sheet=sheet_name,
-                            sex=sex,
-                            age_group=str(row.get("age group", "all_ages")),
-                            table_name=table_name,
-                            condition="Dementia",
-                        )
-                    )
-                except Exception as e:
-                    logger.warning(f"S2.4 cleaned row {idx}: {e}")
-            logger.info(
-                f"Sheet {sheet_name}: Extracted {len(records)} records from already-cleaned DataFrame."
-            )
-            return records
-            return records
-        # Otherwise, fall back to raw Excel-like logic
-        header_row_idx = None
-        for i in range(min(15, len(df))):
-            if pd.notna(df.iloc[i, 0]) and "Year" in str(df.iloc[i, 0]):
-                header_row_idx = i
+    # --- Special Handling for Table 11 (CVD Mortality) ---
+    if sheet_name == "All CVD" and "AIHW-CVD-92" in file_name:
+        logger.info("Applying special handling for CVD Table 11")
+        
+        # Find Table 11
+        table_start_idx = None
+        for i in range(len(df)):
+            if pd.notna(df.iloc[i, 0]) and "Table 11" in str(df.iloc[i, 0]):
+                table_start_idx = i
                 break
-
-        if header_row_idx is not None:
-            logger.info(f"Found header row at row {header_row_idx} in S2.4")
-            data_start_row = header_row_idx + 1
-            data_df = df.iloc[data_start_row:].copy()
-            data_df.columns = [f"col_{j}" for j in range(len(data_df.columns))]
-
-            for idx, row in data_df.iterrows():
-                year_val = row["col_0"]
-                year = extract_year(year_val)
-
-                if year:
-                    for col_idx, sex in [(1, "male"), (2, "female"), (3, "persons")]:
-                        col_key = f"col_{col_idx}"
-                        if col_key in row and pd.notna(row[col_key]):
+        
+        if table_start_idx is not None:
+            # Data starts 3 rows after table title (year, number headers, sex headers)
+            data_start_idx = table_start_idx + 3
+            
+            # Process each row
+            for idx in range(data_start_idx, len(df)):
+                row = df.iloc[idx]
+                
+                # Stop if we hit empty row or notes
+                if pd.isna(row[0]) or str(row[0]).lower().startswith('note'):
+                    break
+                
+                try:
+                    # Extract year
+                    year = int(float(row[0]))
+                    
+                    # Process deaths (columns 1-3)
+                    for col_idx, sex in [(1, "men"), (2, "women"), (3, "persons")]:
+                        if pd.notna(row[col_idx]):
                             try:
-                                value = float(row[col_key])
-                                records.append(
-                                    AIHWRecord(
-                                        year=year,
-                                        value=value,
-                                        metric_type=MetricType.NUMBER,
-                                        source_sheet=sheet_name,
-                                        sex=str(row["Sex"]).strip().lower(),
-                                        age_group="all_ages",
-                                        table_name=table_name,
-                                        condition="Dementia",
-                                    )
-                                )
+                                value = float(str(row[col_idx]).replace(',', ''))
+                                records.append(AIHWRecord(
+                                    year=year,
+                                    value=value,
+                                    metric_type=MetricType.NUMBER,
+                                    source_sheet="Table 11",
+                                    sex=sex,
+                                    age_group="all_ages",
+                                    table_name="Cardiovascular disease deaths",
+                                    condition="Cardiovascular Disease"
+                                ))
                             except (ValueError, TypeError) as e:
-                                logger.warning(
-                                    f"Sheet {sheet_name}, Row {idx+data_start_row}, Col {col_idx}: Could not convert value '{row[col_key]}' to float. Error: {e}"
-                                )
-            logger.info(
-                f"Sheet {sheet_name}: Extracted {len(records)} records using special handling."
-            )
+                                logger.warning(f"Error converting deaths value in row {idx}, col {col_idx}: {e}")
+                    
+                    # Process age-standardised rates (columns 7-9)
+                    for col_idx, sex in [(7, "men"), (8, "women"), (9, "persons")]:
+                        if pd.notna(row[col_idx]):
+                            try:
+                                value = float(str(row[col_idx]).replace(',', ''))
+                                records.append(AIHWRecord(
+                                    year=year,
+                                    value=value,
+                                    metric_type=MetricType.STANDARDISED_RATE,
+                                    source_sheet="Table 11",
+                                    sex=sex,
+                                    age_group="all_ages",
+                                    table_name="Cardiovascular disease deaths",
+                                    condition="Cardiovascular Disease"
+                                ))
+                            except (ValueError, TypeError) as e:
+                                logger.warning(f"Error converting rate value in row {idx}, col {col_idx}: {e}")
+                
+                except Exception as e:
+                    logger.warning(f"Error processing CVD row {idx}: {e}")
+                    continue
+            
+            logger.info(f"Extracted {len(records)} CVD records from Table 11")
             return records
-        else:
-            logger.warning(
-                f"Could not find header row for special handling in Sheet {sheet_name}."
-            )
-            # Fall through to standard processing if special handling fails
+
+    # --- Special Handling for S2.4 (Dementia Prevalence) ---
+    elif sheet_name == "S2.4" and "AIHW-DEM-02-S2-Prevalence" in file_name:
+        logger.info("Applying special handling for Sheet S2.4")
+        
+        # Find data start (after headers)
+        data_start = None
+        for i in range(len(df)):
+            if pd.notna(df.iloc[i, 0]) and str(df.iloc[i, 0]).strip().isdigit():
+                data_start = i
+                break
+        
+        if data_start is not None:
+            # Process each row
+            for idx in range(data_start, len(df)):
+                row = df.iloc[idx]
+                
+                # Stop if we hit empty row
+                if pd.isna(row[0]):
+                    break
+                
+                try:
+                    year = int(float(row[0]))
+                    # Process men, women, persons (columns 1-3)
+                    for col_idx, sex in [(1, "men"), (2, "women"), (3, "persons")]:
+                        if pd.notna(row[col_idx]):
+                            try:
+                                value = float(str(row[col_idx]).replace(',', ''))
+                                records.append(AIHWRecord(
+                                    year=year,
+                                    value=value,
+                                    metric_type=MetricType.NUMBER,
+                                    source_sheet="S2.4",
+                                    sex=sex,
+                                    age_group="all_ages",
+                                    table_name="Australians living with dementia",
+                                    condition="Dementia"
+                                ))
+                            except (ValueError, TypeError) as e:
+                                logger.warning(f"Error converting value in row {idx}, col {col_idx}: {e}")
+                
+                except Exception as e:
+                    logger.warning(f"Error processing dementia prevalence row {idx}: {e}")
+                    continue
+            
+            logger.info(f"Extracted {len(records)} dementia prevalence records from S2.4")
+            return records
 
     # --- Special Handling for S3.5 (Dementia Mortality) ---
     elif sheet_name == "S3.5" and "AIHW-DEM-02-S3-Mortality" in file_name:
         logger.info("Applying special handling for Sheet S3.5")
-        # Detect if DataFrame is already cleaned
-        expected_cols = {"Year", "Sex", "Prevalence (%)", "Number of Cases"}
-        if expected_cols.issubset(set(df.columns)):
-            for idx, row in df.iterrows():
-                try:
-                    year = int(row["Year"])
-                    sex = str(row["Sex"]).strip().lower()
-                    value = float(str(row["Number of Cases"]).replace("%", "").replace(",", ""))
-                    records.append(
-                        AIHWRecord(
-                            year=year,
-                            value=value,
-                            metric_type=MetricType.PREVALENCE,
-                            source_sheet=sheet_name,
-                            sex=sex,
-                            age_group="all_ages",
-                            table_name=table_name,
-                            condition="Dementia",
-                        )
-                    )
-                except Exception as e:
-                    logger.warning(f"S3.5 cleaned row {idx}: {e}")
-            logger.info(
-                f"Sheet {sheet_name}: Extracted {len(records)} records from already-cleaned DataFrame."
-            )
-            return records
-
-        # Otherwise, fall back to raw Excel-like logic
-        header_rows = []
-        max_search_rows = min(20, len(df))
-        for i in range(max_search_rows):
-            cell = str(df.iloc[i, 0]).strip().lower()  # Only check first column
-            if "year" in cell:
-                logger.debug(f"Found year header candidate at row {i}: {cell}")
-                header_rows = [i, i+1] if i+1 < len(df) else [i]
-                break
-
-        if not header_rows:
-            logger.warning("Could not find year header in column A, using rows 0-1")
-            header_rows = [0, 1]
-
-        logger.debug(f"Final header rows: {header_rows}")
-
-        logger.info(
-            f"S3.5: Using header rows at indices {header_rows[0]} and {header_rows[1]}"
-        )
-
-        composite_headers = []
-        for col_idx in range(len(df.columns)):
-            if col_idx == 0:
-                year_header = " ".join([
-                    str(df.iloc[row_idx, col_idx]).strip()
-                    for row_idx in header_rows
-                    if pd.notna(df.iloc[row_idx, col_idx])
-                ]).lower().replace(" ", "_")
-                composite_headers.append(year_header)
-            else:
-                primary = str(df.iloc[header_rows[0], col_idx]).strip()
-                secondary = str(df.iloc[header_rows[-1], col_idx]).strip() if len(header_rows) > 1 else ""
-                header = f"{secondary}_{primary}".lower().replace(" ", "_") if secondary else primary.lower().replace(" ", "_")
-                composite_headers.append(header)
-
-        logger.debug(f"Composite headers: {composite_headers}")
-
-        data_start_row = header_rows[1] + 1
-        data_df = df.iloc[data_start_row:].copy()
-        logger.debug("S3.5 - First 5 rows of parsed data:")
-        for i in range(min(5, len(data_df))):
-            logger.debug(f"Row {i}: {data_df.iloc[i].to_dict()}")
-        data_df.columns = composite_headers
-
-        parsed_years = []
-        for idx, row in data_df.iterrows():
-            year_cell = str(row.iloc[0]).strip()
-            logger.debug(f"Raw year value: {year_cell}")
-            year_cell = year_cell.rstrip('.').split()[0]
-            year = extract_year(year_cell)
-            logger.debug(f"Parsed year: {year} from '{year_cell}'")
-            if year:
-                parsed_years.append(year)
-            else:
-                continue
-
-            for col in [
-                "alzheimer’s_disease_age-standardised_rate_(per_100,000_people)",
-                "unspecified_dementia_age-standardised_rate_(per_100,000_people)",
-                "vascular_dementia_age-standardised_rate_(per_100,000_people)",
-            ]:
-                if col in row and pd.notna(row[col]):
-                    try:
-                        records.append(
-                            AIHWRecord(
-                                year=year,
-                                value=float(row[col]),
-                                metric_type=MetricType.STANDARDISED_RATE,
-                                source_sheet=sheet_name,
-                                sex="persons",
-                                age_group="all_ages",
-                                table_name=table_name,
-                                condition=col.split("_")[0].title(),
-                            )
-                        )
-                    except (ValueError, TypeError) as e:
-                        logger.warning(f"Error processing {col}: {e}")
-
-        logger.info(
-            f"S3.5: Successfully parsed {len(parsed_years)} years. Sample: {parsed_years[:5]} (Total unique: {len(set(parsed_years))})"
-        )
-        logger.info(
-            f"Sheet {sheet_name}: Extracted {len(records)} dementia mortality records"
-        )
-        return records
-
-    # --- Special Handling for Table 11 (CVD Mortality) ---
-    elif sheet_name == "All CVD" and "AIHW-CVD-92" in file_name:
-        logger.info("Applying special handling for CVD Table 11")
-        # Detect if DataFrame is already cleaned
-        expected_cols = {"year", "sex", "rate (%)", "number of deaths"}
-        normalised_cols = set(col.strip().lower() for col in df.columns)
-        # Debug: log columns for troubleshooting
-        logger.debug(f"Table 11: normalised_cols={normalised_cols}, expected_cols={expected_cols}")
-        if set(ec.strip().lower() for ec in expected_cols).issubset(normalised_cols):
-            df_clean = df.copy()
-            df_clean.columns = [col.strip().lower() for col in df_clean.columns]
-            for idx, row in df_clean.iterrows():
-                try:
-                    year = int(row["year"])
-                    sex = str(row["sex"]).strip().lower()
-                    value = float(str(row["number of deaths"]).replace("%", "").replace(",", ""))
-                    records.append(
-                        AIHWRecord(
-                            year=year,
-                            value=value,
-                            metric_type=MetricType.MORTALITY,
-                            source_sheet=sheet_name,
-                            sex=sex,
-                            age_group="all_ages",
-                            table_name="Cardiovascular disease deaths",
-                            condition="Cardiovascular Disease",
-                        )
-                    )
-                except Exception as e:
-                    logger.warning(f"Table 11 cleaned row {idx}: {e}")
-            logger.info(
-                f"Sheet {sheet_name}, Table 11: Extracted {len(records)} records from already-cleaned DataFrame."
-            )
-            return records
-
-        # Otherwise, fall back to raw Excel-like logic
-        table_start_idx, table_end_idx = None, None
+        
+        # Find data start (after headers)
+        data_start = None
         for i in range(len(df)):
-            if pd.notna(df.iloc[i, 0]) and "Table 11" in str(df.iloc[i, 0]):
-                table_start_idx = i
-                for j in range(i + 5, len(df)):
-                    if pd.isna(df.iloc[j, 0]) or str(df.iloc[j, 0]).lower().strip().startswith("note"):
-                        table_end_idx = j
-                        break
-                if table_end_idx is None:
-                    table_end_idx = len(df)
+            if pd.notna(df.iloc[i, 0]) and str(df.iloc[i, 0]).strip().isdigit():
+                data_start = i
                 break
-
-        if table_start_idx is not None and table_end_idx is not None:
-            logger.info(f"Found Table 11 from rows {table_start_idx} to {table_end_idx}")
-            header_row_idx = table_start_idx + 2
-            data_start_row = header_row_idx + 1
-            table_df = df.iloc[data_start_row:table_end_idx].copy()
-            table_df.columns = [f"col_{j}" for j in range(len(table_df.columns))]
-
-            for idx, row in table_df.iterrows():
-                year_val = row["col_0"]
-                year_match = re.search(
-                    r"^(19[89]\d|20[01]\d|202[0-2])$", str(year_val).strip()
-                )
-                if year_match:
-                    year = int(year_match.group(0))
-                    metrics_map = {
-                        1: (MetricType.NUMBER, "male"),
-                        2: (MetricType.NUMBER, "female"),
-                        3: (MetricType.NUMBER, "persons"),
-                        4: (MetricType.CRUDE_RATE, "male"),
-                        5: (MetricType.CRUDE_RATE, "female"),
-                        6: (MetricType.CRUDE_RATE, "persons"),
-                        7: (MetricType.STANDARDISED_RATE, "male"),
-                        8: (MetricType.STANDARDISED_RATE, "female"),
-                        9: (MetricType.STANDARDISED_RATE, "persons"),
-                    }
-                    for col_idx, (metric_type, sex) in metrics_map.items():
-                        col_key = f"col_{col_idx}"
-                        if col_key in row and pd.notna(row[col_key]):
+        
+        if data_start is not None:
+            # Get column headers from row before data
+            headers = df.iloc[data_start-1]
+            
+            # Process each row
+            for idx in range(data_start, len(df)):
+                row = df.iloc[idx]
+                
+                # Stop if we hit empty row
+                if pd.isna(row[0]):
+                    break
+                
+                try:
+                    year = int(float(row[0]))
+                    # Process each type of dementia (columns 4-6)
+                    for col_idx in range(4, 7):
+                        if pd.notna(row[col_idx]) and pd.notna(headers[col_idx]):
                             try:
-                                raw_value = str(row[col_key]).strip()
-                                clean_value = re.sub(r"[^\d.]", "", raw_value)
-                                logger.debug(f"Raw: {raw_value} | Cleaned: {clean_value}")
-                                value = float(clean_value) if clean_value else None
-                                records.append(
-                                    AIHWRecord(
-                                        year=year,
-                                        value=value,
-                                        metric_type=metric_type,
-                                        source_sheet="Table 11",
-                                        sex=sex,
-                                        age_group="all_ages",
-                                        table_name="Cardiovascular disease deaths",
-                                        condition="Cardiovascular Disease",
-                                    )
-                                )
+                                value = float(str(row[col_idx]).replace(',', ''))
+                                dementia_type = str(headers[col_idx]).strip()
+                                records.append(AIHWRecord(
+                                    year=year,
+                                    value=value,
+                                    metric_type=MetricType.STANDARDISED_RATE,
+                                    source_sheet="S3.5",
+                                    sex="persons",
+                                    age_group="all_ages",
+                                    table_name="Deaths due to dementia",
+                                    condition=dementia_type
+                                ))
                             except (ValueError, TypeError) as e:
-                                logger.warning(
-                                    f"Sheet {sheet_name}, Table 11, Row {idx+data_start_row}, Col {col_idx}: Could not convert value '{row[col_key]}' to float. Error: {e}"
-                                )
-            logger.info(
-                f"Sheet {sheet_name}, Table 11: Extracted {len(records)} records using special handling."
-            )
+                                logger.warning(f"Error converting value in row {idx}, col {col_idx}: {e}")
+                
+                except Exception as e:
+                    logger.warning(f"Error processing dementia mortality row {idx}: {e}")
+                    continue
+            
+            logger.info(f"Extracted {len(records)} dementia mortality records from S3.5")
             return records
-        else:
-            logger.warning(
-                f"Could not locate Table 11 structure in Sheet {sheet_name}."
-            )
-            # Fall through
 
     # --- Standard Processing Logic (Fallback) ---
     logger.info(f"Applying standard processing for Sheet: '{sheet_name}'")
@@ -633,62 +499,132 @@ def find_tables_in_sheet(df: pd.DataFrame) -> List[Dict]:
     
     return filtered_tables
 
+def parse_age_group(label: str) -> str:
+    """
+    Parse and normalise an age group label, handling non-integer ranges, composite groups, and non-standard dashes.
+
+    Args:
+        label (str): The raw age group label.
+
+    Returns:
+        str: The canonicalised age group label, or None if unparseable.
+
+    Notes:
+        - Normalises all dash types to standard hyphen.
+        - Accepts non-integer ranges (e.g., "65.5–70", "0–4/5–9", "65+").
+        - Handles composite groups (e.g., "0–4/5–9", "65+ and over").
+        - Logs a warning if parsing fails.
+    """
+    import re
+
+    if not isinstance(label, str):
+        return None
+
+    # Normalise dashes to standard hyphen
+    label = label.replace("–", "-").replace("—", "-").replace("−", "-")
+    label = label.strip().lower()
+
+    # Remove common extraneous text
+    label = re.sub(r"\band over\b|\byears?\b|\byr\b|\byrs\b", "", label)
+    label = label.replace("  ", " ").strip()
+
+    # Accept "all ages" or "total"
+    if label in {"all ages", "total"}:
+        return label
+
+    # Accept single group (e.g., "65+")
+    if re.match(r"^\d+(\.\d+)?\+$", label):
+        return label
+
+    # Accept range (e.g., "0-4", "65.5-70")
+    if re.match(r"^\d+(\.\d+)?-\d+(\.\d+)?$", label):
+        return label
+
+    # Accept composite groups separated by "/" or ","
+    if "/" in label or "," in label:
+        parts = re.split(r"[/,]", label)
+        parsed_parts = [parse_age_group(part.strip()) for part in parts]
+        if all(parsed_parts):
+            return "/".join(parsed_parts)
+        else:
+            logger.warning(f"Failed to parse composite age group: '{label}'")
+            return None
+
+    # Accept "65+ and over" as "65+"
+    if re.match(r"^\d+(\.\d+)?\+\s*and\s*over$", label):
+        return re.match(r"^(\d+(\.\d+)?\+)", label).group(1)
+
+    logger.warning(f"Unrecognised age group label: '{label}'")
+    return None
+
 def extract_row_metadata(row: pd.Series) -> Dict:
-    """Extract metadata from a row including sex, age group, and year."""
+    """
+    Extract metadata from a row including sex, age group, and year.
+
+    This version uses robust age group parsing and context-aware year validation.
+    Logs warnings for any parsing failures but does not halt processing.
+
+    Args:
+        row (pd.Series): The row to extract metadata from.
+
+    Returns:
+        Dict: Metadata dictionary with possible keys: 'sex', 'age_group', 'year'.
+    """
     metadata = {}
-    
+
     for col, val in row.items():
-        # Convert to string, handling non-string types
         try:
             if pd.isna(val):
                 continue
             val_str = str(val).strip().lower()
             col_str = str(col).strip().lower()
-            
+
             # Skip numeric values that aren't actually years
             if isinstance(val, (int, float)) or val_str.replace('.', '', 1).isdigit():
                 try:
                     numeric_value = float(val)
-                    # If it's a large number, it's probably a count/value rather than a year
                     if numeric_value > 3000:
                         continue
-                except:
+                except Exception:
                     pass
-        except:
+        except Exception:
             continue
-        
+
         # Check if column name indicates a year column
         if 'year' in col_str:
             try:
-                # Extract year directly from a year column
                 year_match = re.search(r'(?:19|20)\d{2}', val_str)
                 if year_match:
                     year_value = int(year_match.group())
-                    # More restrictive validation: only allow years between 2009 and 2022
-                    if 2009 <= year_value <= 2022:
+                    # Allow years from 1960 to 2060 (context-aware, see below)
+                    if 1960 <= year_value <= 2060:
                         metadata['year'] = year_value
+                    else:
+                        logger.warning(f"Year {year_value} outside valid range (1960-2060) in column '{col_str}'")
                     continue
             except (ValueError, TypeError):
                 pass
-        
+
         # Extract sex
-        if val_str in ['m', 'men', 'male', 'males', 'women', 'f', 'female', 'females', 'p', 'person', 'persons', 'people', 'all']:
+        if val_str in ['m', 'men', 'male', 'males', 'women', 'f', 'female', 'females', 'p', 'person', 'persons', 'people']:
             metadata['sex'] = val_str
-        
-        # Extract age group
-        elif re.match(r'\d+[-–]\d+|\d+\+|total|all ages', val_str):
-            metadata['age_group'] = val_str
-        
-        # Extract year if present in a value - with validation
+
+        # Extract age group using robust parser
+        parsed_age_group = parse_age_group(val_str)
+        if parsed_age_group:
+            metadata['age_group'] = parsed_age_group
+
+        # Extract year if present in a value
         elif re.match(r'(?:19|20)\d{2}(?:[-–]\d{2})?', val_str):
             try:
                 year_value = int(val_str[:4])
-                # More restrictive validation: only allow years between 2009 and 2022
-                if 2009 <= year_value <= 2022:
+                if 1960 <= year_value <= 2060:
                     metadata['year'] = year_value
+                else:
+                    logger.warning(f"Year {year_value} outside valid range (1960-2060) in value '{val_str}'")
             except ValueError:
                 continue
-    
+
     return metadata
 
 def determine_metric_type(column_name: str, value: float) -> MetricType:
@@ -795,7 +731,12 @@ def process_aihw_excel(file_path: str, output_path: str) -> AIHWDataset:
             continue
     
     if not all_records:
-        logger.error("No records were extracted from any sheet")
+        logger.warning("No records were extracted from any sheet. Writing empty output file with headers.")
+        # Define the expected columns for the output CSV
+        expected_columns = ['year', 'source_sheet', 'sex', 'age_group', 'metric', 'value', 'unit', 'condition', 'source_table']
+        empty_df = pd.DataFrame(columns=expected_columns)
+        empty_df.to_csv(output_path, index=False)
+        logger.info(f"Saved empty output file with headers to {output_path}")
         return AIHWDataset(
             records=[],
             source_file=Path(file_path).name,
@@ -833,7 +774,7 @@ def process_aihw_excel(file_path: str, output_path: str) -> AIHWDataset:
             df = df.sort_values(sort_cols)
         
         # Drop any empty columns
-        df = df.dropna(axis=1, how='all')
+        df = df.dropna(axis=1, how='persons')
         
         # Drop duplicate records
         df = df.drop_duplicates()

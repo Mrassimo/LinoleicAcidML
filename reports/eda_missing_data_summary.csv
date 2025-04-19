@@ -1,0 +1,15 @@
+Column,Missing Count,Missing Percentage
+BMI_AgeStandardised,62,100.0
+Population,62,100.0
+Dementia_Prevalence_Number,49,79.03225806451613
+Dementia_Mortality_Rate_ASMR,48,77.41935483870968
+Obesity_Prevalence_AgeStandardised,29,46.774193548387096
+Diabetes_Prevalence_Rate_AgeStandardised,29,46.774193548387096
+Diabetes_Treatment_Rate_AgeStandardised,29,46.774193548387096
+NonHDL_Cholesterol_AgeStandardised,23,37.096774193548384
+Total_Cholesterol_AgeStandardised,23,37.096774193548384
+LA_perc_kcal_lag20,20,32.25806451612903
+CVD_Mortality_Rate_ASMR,19,30.64516129032258
+LA_perc_kcal_lag15,15,24.193548387096776
+LA_perc_kcal_lag10,10,16.129032258064516
+LA_perc_kcal_lag5,5,8.064516129032258

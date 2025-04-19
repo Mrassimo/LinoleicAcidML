@@ -29,7 +29,7 @@ def load_unified_dataset(config: Optional[DatasetConfig] = None) -> pd.DataFrame
     Returns:
         pd.DataFrame: Loaded dataset.
     """
-    path = config.csv_path if config else "data/processed/analytical_data_australia_final.csv"
+    path = config.csv_path if config else DatasetConfig().csv_path
     df = pd.read_csv(path)
     return df
 

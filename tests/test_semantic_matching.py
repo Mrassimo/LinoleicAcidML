@@ -64,6 +64,7 @@ def test_item_match_validation():
     # Invalid similarity score (< 0)
     with pytest.raises(pydantic.ValidationError):
         ItemMatch(**{**valid_match, 'similarity_score': -0.1})
+
 def test_preprocess_item_name():
     """Test item name preprocessing"""
     # Test lowercase conversion
@@ -119,40 +120,41 @@ def test_find_best_matches(sample_items, model):
     )
     assert len(high_threshold_matches) <= len(matches)
 
-def test_find_best_matches_empty_input(model):
-    """
-    Test handling of empty input lists for semantic matching.
+def test_find_best_matches_empty_input():
+    """Test find_best_matches function with empty or invalid inputs."""
+    # Test with empty FAO items
+    empty_fao = []
+    la_items = ["apple", "banana"]
+    sim_matrix = np.array([[0.8, 0.3]])  # Matrix dimensions don't matter when fao_items is empty
+    result = find_best_matches(empty_fao, la_items, sim_matrix)
+    assert result == [], "Should return empty list when FAO items are empty"
 
-    This test ensures that the function returns an empty list when either or both
-    input lists are empty. All code and comments use Australian English.
-    """
-    from sklearn.metrics.pairwise import cosine_similarity
-    import numpy as np
+    # Test with empty LA items
+    fao_items = ["apple", "banana"]
+    empty_la = []
+    sim_matrix = np.array([[0.8], [0.3]])  # Matrix dimensions don't matter when la_items is empty
+    result = find_best_matches(fao_items, empty_la, sim_matrix)
+    assert result == [], "Should return empty list when LA items are empty"
 
-    # Empty FAO items
-    fao_items = []
-    la_items = ['Soybean Oil']
-    # Generate dummy embeddings for empty input
-    fao_embeddings = np.zeros((0, 384))
-    la_embeddings = model.encode([preprocess_item_name(item) for item in la_items])
-    similarity_matrix = cosine_similarity(fao_embeddings, la_embeddings)
-    matches = find_best_matches(fao_items, la_items, similarity_matrix)
-    assert len(matches) == 0
+    # Test with both empty inputs
+    result = find_best_matches([], [], np.array([]))
+    assert result == [], "Should return empty list when both inputs are empty"
 
-    # Empty LA items
-    fao_items = ['Soybean Oil']
-    la_items = []
-    fao_embeddings = model.encode([preprocess_item_name(item) for item in fao_items])
-    la_embeddings = np.zeros((0, 384))
-    similarity_matrix = cosine_similarity(fao_embeddings, la_embeddings)
-    matches = find_best_matches(fao_items, la_items, similarity_matrix)
-    assert len(matches) == 0
+    # Test with valid inputs but empty similarity matrix
+    fao_items = ["apple", "banana"]
+    la_items = ["apple", "orange"]
+    empty_sim_matrix = np.array([])
+    result = find_best_matches(fao_items, la_items, empty_sim_matrix)
+    assert result == [], "Should return empty list when similarity matrix is empty"
 
-    # Both empty
-    fao_items = []
-    la_items = []
-    fao_embeddings = np.zeros((0, 384))
-    la_embeddings = np.zeros((0, 384))
-    similarity_matrix = cosine_similarity(fao_embeddings, la_embeddings)
-    matches = find_best_matches(fao_items, la_items, similarity_matrix)
-    assert len(matches) == 0
+    # Test with valid inputs but wrong similarity matrix dimensions
+    fao_items = ["apple", "banana"]
+    la_items = ["apple", "orange"]
+    wrong_sim_matrix = np.array([[0.8, 0.3]])  # 1x2 matrix for 2 items
+    result = find_best_matches(fao_items, la_items, wrong_sim_matrix)
+    assert result == [], "Should return empty list when similarity matrix has wrong dimensions"
+
+    # Test with valid inputs but similarity matrix with wrong number of columns
+    wrong_cols_matrix = np.array([[0.8, 0.3, 0.5], [0.4, 0.9, 0.2]])  # 2x3 matrix for 2x2 items
+    result = find_best_matches(fao_items, la_items, wrong_cols_matrix)
+    assert result == [], "Should return empty list when similarity matrix has wrong number of columns"

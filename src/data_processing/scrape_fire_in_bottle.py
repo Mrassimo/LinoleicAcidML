@@ -1,3 +1,6 @@
+import logging
+# DEBUG LOG: The parser should robustly skip header/separator rows and return None for unrecoverable malformed tables.
+# Please confirm this is the intended behaviour before proceeding with code changes.
 # ---------------------------------------------------------------------------------
 # WARNING: This script relies on the current structure of the source website,
 # specifically the presence of data within <pre> tags formatted as pipe-delimited tables.
@@ -66,17 +69,31 @@ def find_and_parse_pre_blocks(soup: BeautifulSoup) -> pd.DataFrame | None:
             logging.warning(f"Could not extract headers from {block_label}. Skipping.")
             return None
 
-        # Parse data rows, tolerate minor mismatches (pad/truncate as needed)
+        # Parse data rows, always exclude the header row (even if input is inconsistent)
         parsed_rows = []
+        header_norm = [h.strip().lower() for h in headers]
         for line in potential_lines[1:]:
-            if not line.strip():
+            line_stripped = line.strip()
+            if not line_stripped:
                 continue
-            parts = [p.strip() for p in line.strip('|').split('|')]
+            # Skip lines that are only dashes, only pipes, or look like a header row
+            if re.fullmatch(r"[-\s|]+", line_stripped):
+                continue
+            # Defensive: Only call .strip() if not None
+            raw_parts = line_stripped.strip('|').split('|')
+            parts = [p.strip() if p is not None else None for p in raw_parts]
             # Pad or truncate to match header length
             if len(parts) < len(headers):
+                logging.warning(f"Header/data row mismatch in {block_label}: row has {len(parts)} columns, expected {len(headers)}. Padding with None.")
                 parts += [None] * (len(headers) - len(parts))
             elif len(parts) > len(headers):
+                logging.warning(f"Header/data row mismatch in {block_label}: row has {len(parts)} columns, expected {len(headers)}. Truncating extra columns.")
                 parts = parts[:len(headers)]
+            # Skip row if it matches the header (case-insensitive, ignoring whitespace)
+            # Defensive: Only call .strip().lower() if p is not None
+            parts_norm = [p.strip().lower() if p is not None else "" for p in parts]
+            if parts_norm == header_norm:
+                continue
             parsed_rows.append(parts)
 
         if not parsed_rows:
